@@ -1,3 +1,6 @@
+> [!WARNING]
+> This Project is no longer be maintained and has been moved to [Eigen-Bot](https://github.com/TheCodeVerseHub/Eigen-Bot) All further updates will only be shared in @Eigen-Bot 
+
 # Eigen Bot - Comprehensive Discord Community & Economy Bot
 
 > **A feature-rich, production-ready Discord bot combining economy systems, community engagement, entertainment, and powerful moderation tools.**
@@ -611,3 +614,4 @@ Special thanks to:
 Made with ❤️ for Discord communities
 
 </div>
+
