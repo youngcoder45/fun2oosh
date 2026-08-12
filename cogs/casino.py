@@ -29,7 +29,12 @@ from utils.anti_fraud import anti_fraud as anti_fraud_instance
 from utils.config import Config
 from utils.cooldowns import cooldown_manager, cooldown_notice
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, responsible_gaming_notice
+from utils.helpers import (
+    COLOR_ERROR,
+    COLOR_INFO,
+    COLOR_SUCCESS,
+    responsible_gaming_notice,
+)
 
 
 class CardSuit(Enum):
@@ -212,9 +217,11 @@ class BlackjackGame:
         """Create professional game status embed."""
         # Professional color scheme
         if final:
-            color = discord.Color.green() if not self.player_hand.busted else discord.Color.red()
+            color = discord.Color(
+                COLOR_SUCCESS if not self.player_hand.busted else COLOR_ERROR
+            )
         else:
-            color = discord.Color(COLOR_INFO) # in-progress
+            color = discord.Color(COLOR_INFO)  # in-progress
 
         embed = discord.Embed(
             title="Blackjack",
@@ -345,19 +352,19 @@ class BlackjackGame:
         # Determine result
         if self.player_hand.busted:
             payout = 0
-            color = discord.Color.red()
+            color = discord.Color(COLOR_ERROR)
         elif self.dealer_hand.busted:
             payout = self.player_hand.bet * 2
-            color = discord.Color.green()
+            color = discord.Color(COLOR_SUCCESS)
         elif self.player_hand.is_blackjack and not self.dealer_hand.is_blackjack:
-            payout = int(self.player_hand.bet * 2.5) # 3:2 payout
+            payout = int(self.player_hand.bet * 2.5)  # 3:2 payout
             color = discord.Color.gold()
         elif player_value > dealer_value:
             payout = self.player_hand.bet * 2
-            color = discord.Color.green()
+            color = discord.Color(COLOR_SUCCESS)
         elif player_value < dealer_value:
             payout = 0
-            color = discord.Color.red()
+            color = discord.Color(COLOR_ERROR)
         else:
             payout = self.player_hand.bet
             color = discord.Color.blue()
@@ -680,14 +687,14 @@ class Casino(commands.Cog):
                     value=f"Payout: {payout:,} coins (+{profit:,})",
                     inline=False
                 )
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 embed.add_field(
                     name="You Lost",
                     value=f"Lost: {amount:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -756,7 +763,7 @@ class Casino(commands.Cog):
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -827,14 +834,14 @@ class Casino(commands.Cog):
                     value=f"{payout:,} coins (+{profit:,})",
                     inline=False
                 )
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 embed.add_field(
                     name="You Lost",
                     value=f"-{bet:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -917,14 +924,14 @@ class Casino(commands.Cog):
                     value=f"{payout:,} coins (+{profit:,})\n**{multiplier}x** multiplier!",
                     inline=False
                 )
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 embed.add_field(
                     name="You Lost",
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -1000,14 +1007,14 @@ class Casino(commands.Cog):
                     value=f"{payout:,} coins (+{profit:,})\nCrashed at {crash_point:.2f}x",
                     inline=False
                 )
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 embed.add_field(
                     name="Crashed",
                     value=f"Crashed at {crash_point:.2f}x\nLost: {bet:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -1064,7 +1071,7 @@ class Casino(commands.Cog):
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
-                embed.color = discord.Color.dark_red()
+                embed.color = COLOR_ERROR
             else:
                 # Click! Survived
                 payout = int(bet * 5) # 4x profit (5x total)
@@ -1082,7 +1089,7 @@ class Casino(commands.Cog):
                     value=f"{payout:,} coins (+{profit:,})\nYou got lucky!",
                     inline=False
                 )
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
 
             await session.commit()
 
@@ -1145,10 +1152,10 @@ class Casino(commands.Cog):
                 )
 
                 result_text = f"```diff\n+ WIN\n```\n**Payout:** {payout:,} coins\n**Profit:** +{profit:,} coins"
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             elif player_card.value < dealer_card.value:
                 result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} coins"
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
             else:
                 # Tie - return bet
                 wallet.balance += bet
@@ -1273,10 +1280,10 @@ class Casino(commands.Cog):
                 )
 
                 result_text = f"```diff\n+ WIN\n```\n**Winner:** {winner.upper()}\n**Payout:** {payout:,} coins\n**Profit:** +{profit:,} coins"
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 result_text = f"```diff\n- LOSS\n```\n**Winner:** {winner.upper()}\n**Lost:** {amount:,} coins"
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -1376,10 +1383,10 @@ class Casino(commands.Cog):
                     )
 
                     result_text = f"```diff\n+ WIN\n```\n**Payout:** {payout:,} coins\n**Profit:** +{profit:,} coins"
-                    embed.color = discord.Color.green()
+                    embed.color = COLOR_SUCCESS
                 else:
                     result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} coins"
-                    embed.color = discord.Color.red()
+                    embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -1481,10 +1488,10 @@ class Casino(commands.Cog):
                 )
 
                 result_text = f"```diff\n+ WIN\n```\n**Multiplier:** {multiplier}x\n**Payout:** {payout:,} coins\n**Profit:** +{profit:,} coins"
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             else:
                 result_text = f"```diff\n- LOSS\n```\n**Matches:** {matches}/5\n**Lost:** {bet:,} coins"
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 
@@ -1760,7 +1767,7 @@ class Casino(commands.Cog):
             if view.action == "fold":
                 embed = discord.Embed(
                     title="Texas Hold'em Poker",
-                    color=discord.Color.red()
+                    color=COLOR_ERROR
                 )
                 embed.add_field(
                     name="Outcome",
@@ -1789,7 +1796,7 @@ class Casino(commands.Cog):
             if view.action == "fold":
                 embed = discord.Embed(
                     title="Texas Hold'em Poker",
-                    color=discord.Color.red()
+                    color=COLOR_ERROR
                 )
                 embed.add_field(
                     name="Outcome",
@@ -1818,7 +1825,7 @@ class Casino(commands.Cog):
             if view.action == "fold":
                 embed = discord.Embed(
                     title="Texas Hold'em Poker",
-                    color=discord.Color.red()
+                    color=COLOR_ERROR
                 )
                 embed.add_field(
                     name="Outcome",
@@ -1847,7 +1854,7 @@ class Casino(commands.Cog):
             if view.action == "fold":
                 embed = discord.Embed(
                     title="Texas Hold'em Poker",
-                    color=discord.Color.red()
+                    color=COLOR_ERROR
                 )
                 embed.add_field(
                     name="Outcome",
@@ -1962,7 +1969,7 @@ class Casino(commands.Cog):
                 )
 
                 result_text = f"```diff\n+ WIN\n```\n**Won:** {payout:,} coins\n**Profit:** +{profit:,} coins"
-                embed.color = discord.Color.green()
+                embed.color = COLOR_SUCCESS
             elif winner == "tie":
                 # Return bet on tie
                 wallet.balance += bet
@@ -1975,7 +1982,7 @@ class Casino(commands.Cog):
                 embed.color = discord.Color.gold()
             else:
                 result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} coins"
-                embed.color = discord.Color.red()
+                embed.color = COLOR_ERROR
 
             await session.commit()
 

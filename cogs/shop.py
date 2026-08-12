@@ -23,7 +23,7 @@ from utils.pagination import PaginationView
 
 RARITY_COLORS = {
     "common": 0x9C9C9C,
-    "uncommon": 0x3CB371,
+    "uncommon": 0x00FF00,
     "rare": 0x4169E1,
     "epic": 0x9932CC,
     "legendary": 0xFFD700,

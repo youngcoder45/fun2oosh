@@ -19,8 +19,8 @@ import discord
 # ------------------------------------------------------------------ palette
 
 COLOR_INFO = 0x5865F2  # Discord blurple - neutral / informational
-COLOR_SUCCESS = 0x57F287  # Discord green - rewards, wins
-COLOR_ERROR = 0xED4245  # Discord red - failures, fines, losses
+COLOR_SUCCESS = 0x00FF00  # pure green - rewards, wins
+COLOR_ERROR = 0xFF0000  # pure red - failures, fines, losses
 COLOR_WARNING = 0xFEE75C  # Discord yellow - warnings, cooldowns
 COLOR_GOLD = 0xF1C40F  # achievements, jackpots, premium
 
