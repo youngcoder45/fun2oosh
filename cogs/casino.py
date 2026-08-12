@@ -439,6 +439,19 @@ class SlotMachine:
 
     SYMBOLS = ['CHERRY', 'LEMON', 'ORANGE', 'GRAPE', 'BELL', 'STAR', 'DIAMOND', 'SEVEN']
 
+    # Reel emojis — slots is the only game that uses emojis; without them the
+    # reels look like plain text. Keep them scoped to this class only.
+    EMOJI = {
+        'CHERRY': '\U0001F352',   # 🍒
+        'LEMON': '\U0001F34B',    # 🍋
+        'ORANGE': '\U0001F34A',   # 🍊
+        'GRAPE': '\U0001F347',    # 🍇
+        'BELL': '\U0001F514',     # 🔔
+        'STAR': '\u2B50',         # ⭐
+        'DIAMOND': '\U0001F48E',  # 💎
+        'SEVEN': '\u0037\uFE0F\u20E3',  # 7️⃣
+    }
+
     # Payout multipliers
     PAYOUTS = {
         'DIAMOND': 50, # Diamond - highest
@@ -467,12 +480,12 @@ class SlotMachine:
             # Three of a kind
             symbol = reels[0]
             multiplier = cls.PAYOUTS[symbol]
-            result = f"**JACKPOT!** Three {symbol}!"
+            result = f"**JACKPOT!** Three {cls.EMOJI[symbol]}!"
         elif reels[0] == reels[1] or reels[1] == reels[2]:
             # Two of a kind
             symbol = reels[1]
             multiplier = cls.PAYOUTS[symbol] // 3
-            result = f"Two {symbol}! Small win!"
+            result = f"Two {cls.EMOJI[symbol]}! Small win!"
         else:
             multiplier = 0
             result = "No match. Try again!"
@@ -720,7 +733,8 @@ class Casino(commands.Cog):
             await asyncio.sleep(1)
 
             # Show result
-            embed.description = f"**[ {' | '.join(reels)} ]**"
+            reel_display = ' | '.join(SlotMachine.EMOJI[s] for s in reels)
+            embed.description = f"**[ {reel_display} ]**"
             embed.add_field(name="Result", value=result_text, inline=False)
 
             # Calculate payout

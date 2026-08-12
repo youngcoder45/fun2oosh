@@ -1,5 +1,5 @@
 """
-User achievements — which achievements a user has unlocked and when.
+User achievements: which achievements a user has unlocked and when.
 """
 
 from datetime import datetime
@@ -13,7 +13,7 @@ from .base import Base, utcnow
 class UserAchievement(Base):
     """A user's unlocked achievement."""
 
-    __tablename__ = 'user_achievements'
+    __tablename__ = "user_achievements"
 
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     achievement_id: Mapped[str] = mapped_column(String(50), primary_key=True)

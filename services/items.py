@@ -1,5 +1,5 @@
 """
-Item service — catalog seeding, inventory management, item usage effects,
+Item service: catalog seeding, inventory management, item usage effects,
 crate/lootbox rolling, and in-memory money boosters.
 
 Inventory mutations always happen under the owning user's lock.
@@ -27,7 +27,7 @@ ITEM_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "items.json"
 
 
 class BoosterManager:
-    """In-memory money boosters (lost on restart — acceptable for v1)."""
+    """In-memory money boosters (lost on restart -> acceptable for v1)."""
 
     def __init__(self) -> None:
         self._boosters: Dict[int, Dict[str, Tuple[float, float]]] = {}
@@ -75,7 +75,7 @@ class ItemService:
         if existing > 0:
             return 0
         if not ITEM_DATA_PATH.exists():
-            logger.warning("Item catalog %s not found — skipping seed.", ITEM_DATA_PATH)
+            logger.warning("Item catalog %s not found -> skipping seed.", ITEM_DATA_PATH)
             return 0
         with ITEM_DATA_PATH.open(encoding="utf-8") as f:
             data = json.load(f)
@@ -92,7 +92,7 @@ class ItemService:
                     consumable=row.get("consumable", False),
                     limited=row.get("limited", False),
                     rarity=row.get("rarity", "common"),
-                    emoji=row.get("emoji", ""), # ???
+                    emoji=row.get("emoji", ""),  # ???
                     max_stack=row.get("max_stack", 99),
                     expires_in=row.get("expires_in"),
                     effects=json.dumps(row["effects"]) if row.get("effects") else None,
@@ -104,17 +104,13 @@ class ItemService:
 
     @staticmethod
     async def get(session: AsyncSession, item_id: str) -> Optional[Item]:
-        return (
-            await session.execute(select(Item).where(Item.id == item_id))
-        ).scalar_one_or_none()
+        return (await session.execute(select(Item).where(Item.id == item_id))).scalar_one_or_none()
 
     @staticmethod
-    async def get_all(
-        session: AsyncSession, include_limited: bool = False
-    ) -> List[Item]:
+    async def get_all(session: AsyncSession, include_limited: bool = False) -> List[Item]:
         stmt = select(Item).order_by(Item.category, Item.price)
         if not include_limited:
-            stmt = stmt.where(Item.limited == False) # noqa: E712
+            stmt = stmt.where(Item.limited == False)  # noqa: E712
         return list((await session.execute(stmt)).scalars())
 
     # ----------------------------------------------------------------- inventory
@@ -143,9 +139,7 @@ class ItemService:
         return total or 0
 
     @staticmethod
-    async def grant(
-        session: AsyncSession, user_id: int, item: Item, qty: int = 1
-    ) -> bool:
+    async def grant(session: AsyncSession, user_id: int, item: Item, qty: int = 1) -> bool:
         """Grant ``qty`` of an item to a user (handles stacking + expiry)."""
         if qty <= 0:
             return False
@@ -155,10 +149,8 @@ class ItemService:
             return True
 
     @staticmethod
-    async def _grant_raw(
-        session: AsyncSession, user_id: int, item: Item, qty: int
-    ) -> None:
-        """Grant without locking — callers must hold the user lock."""
+    async def _grant_raw(session: AsyncSession, user_id: int, item: Item, qty: int) -> None:
+        """Grant without locking -> callers must hold the user lock."""
         inv = await ItemService._get_inv(session, user_id, item.id)
         expires_at = None
         if item.expires_in:
@@ -178,9 +170,7 @@ class ItemService:
             )
 
     @staticmethod
-    async def consume(
-        session: AsyncSession, user_id: int, item_id: str, qty: int = 1
-    ) -> bool:
+    async def consume(session: AsyncSession, user_id: int, item_id: str, qty: int = 1) -> bool:
         """Remove ``qty`` of an item from inventory. Returns False if insufficient."""
         if qty <= 0:
             return False
@@ -257,9 +247,7 @@ class ItemService:
             return True
 
     @staticmethod
-    async def use_item(
-        session: AsyncSession, user_id: int, item: Item
-    ) -> Tuple[bool, str]:
+    async def use_item(session: AsyncSession, user_id: int, item: Item) -> Tuple[bool, str]:
         """Consume one unit of a consumable item and apply its effects.
 
         Returns ``(success, message)``. Runs entirely under the user lock.
@@ -282,9 +270,7 @@ class ItemService:
             # --- apply effects -------------------------------------------
             if "money_min" in effects:
                 amount = random.randint(effects["money_min"], effects["money_max"])
-                await EconomyUtils.add_money(
-                    session, user_id, amount, "item", f"Used {item.name}"
-                )
+                await EconomyUtils.add_money(session, user_id, amount, "item", f"Used {item.name}")
                 msg = f"You used **{item.name}** and got **{amount:,} coins**!"
 
             elif "booster" in effects:
@@ -335,6 +321,4 @@ class ItemService:
 
         if not lines:
             lines.append("...empty! Better luck next time.")
-        return f"You opened **{item.name}**!\n" + "\n".join(
-            f"• {line}" for line in lines
-        )
+        return f"You opened **{item.name}**!\n" + "\n".join(f"• {line}" for line in lines)

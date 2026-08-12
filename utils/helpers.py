@@ -25,6 +25,21 @@ COLOR_WARNING = 0xFEE75C  # Discord yellow - warnings, cooldowns
 COLOR_GOLD = 0xF1C40F  # achievements, jackpots, premium
 
 
+def unix_ts(dt) -> int:
+    """Epoch seconds for a naive-UTC datetime (as stored by the models).
+
+    ``datetime.timestamp()`` on a naive datetime assumes the *local* timezone;
+    attaching UTC first keeps Discord relative timestamps (`<t:...:R>`) correct
+    on any host.
+    """
+    if dt is None:
+        return 0
+    if dt.tzinfo is None:
+        from datetime import timezone
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
 def format_coins(amount) -> str:
     """Format an amount of coins with thousands separators."""
     try:
@@ -51,6 +66,37 @@ def format_duration(seconds: float) -> str:
     if minutes:
         return f"{minutes}m {secs}s"
     return f"{secs}s"
+
+
+def parse_duration(text: str) -> Optional[int]:
+    """Parse a duration string into seconds.
+
+    Accepts ``30m``, ``2h``, ``1d``, ``90`` (bare seconds), or ``2h30m``.
+    Returns ``None`` when the input is not a valid duration.
+    """
+    if not text or not text.strip():
+        return None
+    raw = text.strip().lower()
+    try:
+        return int(raw)
+    except ValueError:
+        pass
+
+    units = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}
+    total = 0
+    i = 0
+    while i < len(raw):
+        start = i
+        while i < len(raw) and raw[i].isdigit():
+            i += 1
+        if start == i:
+            return None
+        number = int(raw[start:i])
+        if i >= len(raw) or raw[i] not in units:
+            return None
+        total += number * units[raw[i]]
+        i += 1
+    return total
 
 
 class EmbedBuilder:
@@ -127,7 +173,7 @@ class EmbedBuilder:
     ) -> discord.Embed:
         """Leaderboard embed from a list of (user_id, total) tuples.
 
-        Renders a compact ranked list — one line per player — instead of a
+        Renders a compact ranked list, one line per player, instead of a
         wall of inline fields.
         """
         embed = discord.Embed(
@@ -151,7 +197,7 @@ class EmbedBuilder:
                     name = None
             if name is None:
                 name = f"User {user_id}"
-            lines.append(f"**#{rank}** {name} — {total:,} coins")
+            lines.append(f"**#{rank}** {name} - {total:,} coins")
 
         embed.description = "\n".join(lines)
         return embed

@@ -15,7 +15,13 @@ from services.items import ItemService
 from services.role_income import RoleIncomeService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
+from utils.helpers import (
+    COLOR_INFO,
+    EmbedBuilder,
+    format_coins,
+    format_duration,
+    parse_duration,
+)
 from utils.pagination import PaginationView
 
 RESET_TABLES = (
@@ -24,6 +30,7 @@ RESET_TABLES = (
     "wallets",
     "inventory_items",
     "role_income",
+    "role_claims",
     "user_achievements",
 )
 
@@ -79,12 +86,12 @@ class Admin(commands.Cog):
                 return True
         return False
 
-    @commands.command(name='add_money')
+    @commands.command(name="add_money")
     async def add_money(self, ctx: commands.Context, user: discord.User, amount: int):
         """Add money to a user (admin only)."""
         async with self.bot.get_session() as session:
             success = await EconomyUtils.add_money(
-                session, user.id, amount, 'admin', f'Admin added {amount} coins'
+                session, user.id, amount, "admin", f"Admin added {amount} coins"
             )
 
             if success:
@@ -93,9 +100,11 @@ class Admin(commands.Cog):
             else:
                 await ctx.send("Failed to add money.")
 
-    @app_commands.command(name='add_money', description='Add money to a user (admin only)')
-    @app_commands.describe(user='User to add money to', amount='Amount to add')
-    async def add_money_slash(self, interaction: discord.Interaction, user: discord.User, amount: int):
+    @app_commands.command(name="add_money", description="Add money to a user (admin only)")
+    @app_commands.describe(user="User to add money to", amount="Amount to add")
+    async def add_money_slash(
+        self, interaction: discord.Interaction, user: discord.User, amount: int
+    ):
         """Slash command for adding money."""
         is_owner = interaction.user.id == self.config.owner_id
         is_admin = False
@@ -104,12 +113,14 @@ class Admin(commands.Cog):
             if member and member.guild_permissions.administrator:
                 is_admin = True
         if not (is_owner or is_admin):
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+            await interaction.response.send_message(
+                "You don't have permission to use this command.", ephemeral=True
+            )
             return
 
         async with self.bot.get_session() as session:
             success = await EconomyUtils.add_money(
-                session, user.id, amount, 'admin', f'Admin added {amount} coins'
+                session, user.id, amount, "admin", f"Admin added {amount} coins"
             )
 
             if success:
@@ -118,7 +129,7 @@ class Admin(commands.Cog):
             else:
                 await interaction.response.send_message("Failed to add money.")
 
-    @commands.command(name='reset_economy')
+    @commands.command(name="reset_economy")
     async def reset_economy(self, ctx: commands.Context, confirmation: str = ""):
         """Reset all economy data (admin only - dangerous).
 
@@ -132,7 +143,7 @@ class Admin(commands.Cog):
                 "• All user wallets and balances\n"
                 "• All transaction history\n"
                 "• All bet records\n\n"
-                f"To confirm, type: `{ctx.prefix}reset_economy CONFIRM`"
+                f"To confirm, type: `{ctx.prefix}reset_economy CONFIRM`",
             )
             await ctx.send(embed=embed)
             return
@@ -145,7 +156,7 @@ class Admin(commands.Cog):
             "• All transaction history\n"
             "• All bet records\n"
             "• All inventories and role income settings\n\n"
-            "This cannot be undone."
+            "This cannot be undone.",
         )
         view = ConfirmView(owner_id=ctx.author.id)
         await ctx.send(embed=embed, view=view)
@@ -163,17 +174,20 @@ class Admin(commands.Cog):
             await self._reset_all_data(session)
 
         embed = EmbedBuilder.success_embed(
-            "Economy Reset Complete",
-            "All economy data has been permanently deleted and reset."
+            "Economy Reset Complete", "All economy data has been permanently deleted and reset."
         )
         await ctx.send(embed=embed)
 
-    @app_commands.command(name='reset_economy', description='Reset all economy data (admin only - dangerous)')
-    @app_commands.describe(confirmation='Type CONFIRM to proceed')
+    @app_commands.command(
+        name="reset_economy", description="Reset all economy data (admin only - dangerous)"
+    )
+    @app_commands.describe(confirmation="Type CONFIRM to proceed")
     async def reset_economy_slash(self, interaction: discord.Interaction, confirmation: str):
         """Slash command for resetting economy."""
         if interaction.user.id != self.config.owner_id:
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+            await interaction.response.send_message(
+                "You don't have permission to use this command.", ephemeral=True
+            )
             return
 
         if confirmation.upper() != "CONFIRM":
@@ -183,7 +197,7 @@ class Admin(commands.Cog):
                 "• All user wallets and balances\n"
                 "• All transaction history\n"
                 "• All bet records\n\n"
-                "To confirm, type: `CONFIRM`"
+                "To confirm, type: `CONFIRM`",
             )
             await interaction.response.send_message(embed=embed)
             return
@@ -196,7 +210,7 @@ class Admin(commands.Cog):
             "• All transaction history\n"
             "• All bet records\n"
             "• All inventories and role income settings\n\n"
-            "This cannot be undone."
+            "This cannot be undone.",
         )
         await interaction.response.send_message(embed=embed)
 
@@ -205,15 +219,13 @@ class Admin(commands.Cog):
             await self._reset_all_data(session)
 
         embed = EmbedBuilder.success_embed(
-            "Economy Reset Complete",
-            "All economy data has been permanently deleted and reset."
+            "Economy Reset Complete", "All economy data has been permanently deleted and reset."
         )
         await interaction.followup.send(embed=embed)
 
-
     # --------------------------------------------------- economy config
 
-    @commands.group(name='econfig', aliases=['econf'], invoke_without_command=True)
+    @commands.group(name="econfig", aliases=["econf"], invoke_without_command=True)
     async def econfig(self, ctx: commands.Context):
         """View the current economy configuration for this server."""
         if ctx.guild is None:
@@ -225,7 +237,7 @@ class Admin(commands.Cog):
         embed.set_footer(text="Change values with: !econfig set <key> <value>")
         await ctx.send(embed=embed)
 
-    @econfig.command(name='set')
+    @econfig.command(name="set")
     async def econfig_set(self, ctx: commands.Context, key: str, value: str):
         """Set an economy setting: !econfig set <key> <value>."""
         if ctx.guild is None:
@@ -234,12 +246,15 @@ class Admin(commands.Cog):
             ok, msg = await GuildConfigService.set(session, ctx.guild.id, key.lower(), value)
             if ok:
                 await AuditService.log(
-                    session, ctx.author.id, 'econfig_set',
-                    f'{key}={value}', guild_id=ctx.guild.id,
+                    session,
+                    ctx.author.id,
+                    "econfig_set",
+                    f"{key}={value}",
+                    guild_id=ctx.guild.id,
                 )
         await ctx.send(msg)
 
-    @econfig.command(name='keys')
+    @econfig.command(name="keys")
     async def econfig_keys(self, ctx: commands.Context):
         """List all configurable economy settings."""
         embed = discord.Embed(
@@ -255,7 +270,7 @@ class Admin(commands.Cog):
 
     # --------------------------------------------------- item management
 
-    @commands.command(name='itemgive')
+    @commands.command(name="itemgive")
     async def itemgive(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
         """Give items to a user (admin only)."""
         if qty <= 0:
@@ -266,9 +281,12 @@ class Admin(commands.Cog):
                 return await ctx.send(f"Unknown item `{item_id}`. Use `!shoplist` to list items.")
             await ItemService.grant(session, user.id, item, qty)
             await AuditService.log(
-                session, ctx.author.id, 'item_give',
-                f'{item.id} x{qty} → {user.id}',
-                guild_id=ctx.guild.id if ctx.guild else None, target_id=user.id,
+                session,
+                ctx.author.id,
+                "item_give",
+                f"{item.id} x{qty} → {user.id}",
+                guild_id=ctx.guild.id if ctx.guild else None,
+                target_id=user.id,
             )
         embed = EmbedBuilder.success_embed(
             "Item Granted",
@@ -276,10 +294,16 @@ class Admin(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @commands.command(name='shopadd')
+    @commands.command(name="shopadd")
     async def shopadd(
-        self, ctx: commands.Context, item_id: str, name: str, price: int,
-        category: str = 'misc', sell_price: int = 0, emoji: str = '',
+        self,
+        ctx: commands.Context,
+        item_id: str,
+        name: str,
+        price: int,
+        category: str = "misc",
+        sell_price: int = 0,
+        emoji: str = "",
     ):
         """Add or update an item in the shop: !shopadd <id> <name> <price> [category] [sell_price] [emoji]."""
         if price < 0 or sell_price < 0:
@@ -288,6 +312,7 @@ class Admin(commands.Cog):
             sell_price = int(price * 0.4)
 
         from models import Item
+
         async with self.bot.get_session() as session:
             existing = await ItemService.get(session, item_id.lower())
             if existing:
@@ -299,24 +324,34 @@ class Admin(commands.Cog):
             else:
                 session.add(
                     Item(
-                        id=item_id.lower(), name=name, price=price, sell_price=sell_price,
-                        category=category.lower(), emoji=emoji, consumable=False,
+                        id=item_id.lower(),
+                        name=name,
+                        price=price,
+                        sell_price=sell_price,
+                        category=category.lower(),
+                        emoji=emoji,
+                        consumable=False,
                     )
                 )
             await session.commit()
             await AuditService.log(
-                session, ctx.author.id, 'shop_add',
-                f'{item_id.lower()} ({name}) @ {price}',
+                session,
+                ctx.author.id,
+                "shop_add",
+                f"{item_id.lower()} ({name}) @ {price}",
                 guild_id=ctx.guild.id if ctx.guild else None,
             )
-        await ctx.send(f"Saved item `{item_id.lower()}` — {emoji} **{name}** for {format_coins(price)}.")
+        await ctx.send(
+            f"Saved item `{item_id.lower()}` - {emoji} **{name}** for {format_coins(price)}."
+        )
 
-    @commands.command(name='shopremove')
+    @commands.command(name="shopremove")
     async def shopremove(self, ctx: commands.Context, item_id: str):
         """Remove an item from the shop (admin only)."""
         from sqlalchemy import delete as sa_delete
 
         from models import Item
+
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
@@ -324,12 +359,15 @@ class Admin(commands.Cog):
             await session.execute(sa_delete(Item).where(Item.id == item_id.lower()))
             await session.commit()
             await AuditService.log(
-                session, ctx.author.id, 'shop_remove',
-                item_id.lower(), guild_id=ctx.guild.id if ctx.guild else None,
+                session,
+                ctx.author.id,
+                "shop_remove",
+                item_id.lower(),
+                guild_id=ctx.guild.id if ctx.guild else None,
             )
         await ctx.send(f"Removed item `{item_id.lower()}` from the catalog.")
 
-    @commands.command(name='shoplist', aliases=['itemlist'])
+    @commands.command(name="shoplist", aliases=["itemlist"])
     async def shoplist(self, ctx: commands.Context):
         """List every item in the catalog (admin only)."""
         async with self.bot.get_session() as session:
@@ -346,17 +384,18 @@ class Admin(commands.Cog):
                 description="All items including limited ones.",
                 color=COLOR_INFO,
             )
-            for item in items[start:start + per_page]:
+            for item in items[start : start + per_page]:
                 embed.add_field(
                     name=item.name,
                     value=(
                         f"`{item.id}` • {format_coins(item.price)} • "
-                        f"{item.category} • {item.rarity}"
-                        + ("• limited" if item.limited else "")
+                        f"{item.category} • {item.rarity}" + ("• limited" if item.limited else "")
                     ),
                     inline=False,
                 )
-            embed.set_footer(text=f"Page {start // per_page + 1}/{(len(items) - 1) // per_page + 1}")
+            embed.set_footer(
+                text=f"Page {start // per_page + 1}/{(len(items) - 1) // per_page + 1}"
+            )
             pages.append(embed)
 
         view = PaginationView(pages, owner_id=ctx.author.id)
@@ -364,7 +403,7 @@ class Admin(commands.Cog):
 
     # --------------------------------------------------------- audit log
 
-    @commands.command(name='audit', aliases=['auditlog'])
+    @commands.command(name="audit", aliases=["auditlog"])
     async def audit(self, ctx: commands.Context, limit: int = 10):
         """View recent admin actions (admin only)."""
         if ctx.guild is None:
@@ -383,7 +422,8 @@ class Admin(commands.Cog):
             embed.add_field(
                 name=f"#{entry.id} • {entry.action}",
                 value=(
-                    f"By <@{entry.actor_id}>" + (f"→ <@{entry.target_id}>" if entry.target_id else "")
+                    f"By <@{entry.actor_id}>"
+                    + (f"→ <@{entry.target_id}>" if entry.target_id else "")
                     + f"\n{entry.details or ''}"
                     + f"\n*{entry.created_at.strftime('%Y-%m-%d %H:%M')} UTC*"
                 ),
@@ -400,63 +440,84 @@ class Admin(commands.Cog):
 
     # -------------------------------------------------------- role income
 
-    @commands.group(name='income', aliases=['roleincome'], invoke_without_command=True)
+    @commands.group(name="income", aliases=["roleincome"], invoke_without_command=True)
     async def income(self, ctx: commands.Context):
-        """Manage role-based hourly income for !collect."""
+        """Manage role income (amount + claim interval) for !collect."""
         await self.income_list(ctx)
 
-    @income.command(name='add')
-    async def income_add(self, ctx: commands.Context, role: discord.Role, amount: int):
-        """Add an hourly income for a role: !income add <role> <amount>."""
-        await self._income_set(ctx, role, amount)
+    @income.command(name="add")
+    async def income_add(
+        self, ctx: commands.Context, role: discord.Role, amount: int, interval: str = "1h"
+    ):
+        """Add income for a role: !income add <role> <amount> [interval]."""
+        await self._income_set(ctx, role, amount, interval)
 
-    @income.command(name='set')
-    async def income_set(self, ctx: commands.Context, role: discord.Role, amount: int):
-        """Edit the hourly income for a role: !income set <role> <amount>."""
-        await self._income_set(ctx, role, amount)
+    @income.command(name="set")
+    async def income_set(
+        self, ctx: commands.Context, role: discord.Role, amount: int, interval: str = "1h"
+    ):
+        """Edit income for a role: !income set <role> <amount> [interval]."""
+        await self._income_set(ctx, role, amount, interval)
 
-    async def _income_set(self, ctx: commands.Context, role: discord.Role, amount: int) -> Optional[discord.Message]:
+    async def _income_set(
+        self, ctx: commands.Context, role: discord.Role, amount: int, interval: str = "1h"
+    ) -> Optional[discord.Message]:
         """Shared add/set logic for role income."""
         if ctx.guild is None:
             return await ctx.send("This command only works in servers.")
         if amount <= 0:
-            return await ctx.send("Income must be a positive number of coins per hour.")
+            return await ctx.send("Income must be a positive number of coins.")
         if amount > 1_000_000:
-            return await ctx.send("Income cannot exceed 1,000,000 coins per hour.")
+            return await ctx.send("Income cannot exceed 1,000,000 coins.")
+        seconds = parse_duration(interval)
+        if seconds is None or seconds < 60:
+            return await ctx.send(
+                "Invalid interval. Use a duration like `30m`, `2h`, `1d` (min 1 minute)."
+            )
+        if seconds > 30 * 86400:
+            return await ctx.send("Interval cannot exceed 30 days.")
         async with self.bot.get_session() as session:
-            await RoleIncomeService.set(session, ctx.guild.id, role.id, amount)
+            await RoleIncomeService.set(
+                session, ctx.guild.id, role.id, amount, claim_interval=seconds
+            )
             await AuditService.log(
-                session, ctx.author.id, 'income_set',
-                f'{role.id} ({role.name}) = {amount}/hour', guild_id=ctx.guild.id,
+                session,
+                ctx.author.id,
+                "income_set",
+                f"{role.id} ({role.name}) = {amount} every {format_duration(seconds)}",
+                guild_id=ctx.guild.id,
             )
         embed = EmbedBuilder.success_embed(
-            "Income Set",
-            f"**{role.name}** now pays {format_coins(amount)} per hour.",
+            "Role Income Set",
+            f"**{role.name}** pays {format_coins(amount)} every {format_duration(seconds)}.",
         )
         return await ctx.send(embed=embed)
 
-    @income.command(name='remove')
+    @income.command(name="remove")
     async def income_remove(self, ctx: commands.Context, role: discord.Role):
-        """Remove hourly income from a role: !income remove <role>."""
+        """Remove income from a role: !income remove <role>."""
         if ctx.guild is None:
             return await ctx.send("This command only works in servers.")
         async with self.bot.get_session() as session:
             removed = await RoleIncomeService.remove(session, ctx.guild.id, role.id)
             if removed:
                 await AuditService.log(
-                    session, ctx.author.id, 'income_remove',
-                    f'{role.id} ({role.name})', guild_id=ctx.guild.id,
+                    session,
+                    ctx.author.id,
+                    "income_remove",
+                    f"{role.id} ({role.name})",
+                    guild_id=ctx.guild.id,
                 )
         if removed:
             embed = EmbedBuilder.success_embed(
-                "Income Removed",
-                f"**{role.name}** no longer grants hourly income.",
+                "Role Income Removed",
+                f"**{role.name}** no longer grants income.",
             )
             await ctx.send(embed=embed)
         else:
             await ctx.send(f"**{role.name}** has no configured income.")
 
-    @income.command(name='list')
+    @income.command(name="list")
     async def income_list(self, ctx: commands.Context):
         """List all configured role incomes."""
         if ctx.guild is None:
@@ -465,16 +526,157 @@ class Admin(commands.Cog):
             rows = await RoleIncomeService.list_all(session, ctx.guild.id)
         if not rows:
             return await ctx.send(
-                "No income roles configured. Use `!income add <role> <amount>` to set one."
+                "No income roles configured. Use `!income add <role> <amount> [interval]` "
+                "or `/role-income set`."
             )
         lines = []
         for row in rows:
             role = ctx.guild.get_role(row.role_id)
             label = role.name if role is not None else f"Role {row.role_id}"
-            lines.append(f"**{label}** — {format_coins(row.hourly_rate)} per hour")
+            lines.append(
+                f"**{label}** - {format_coins(row.amount)} "
+                f"every {format_duration(row.claim_interval or 3600)}"
+            )
         embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
         embed.set_footer(text="!collect pays your highest eligible income role")
         await ctx.send(embed=embed)
+
+    # -------------------------------------------------- role income (slash)
+
+    role_income = app_commands.Group(
+        name="role-income",
+        description="Configure role income (admin)",
+        default_permissions=discord.Permissions(administrator=True),
+    )
+
+    async def _is_admin(self, interaction: discord.Interaction) -> bool:
+        """Owner or server administrator."""
+        if interaction.user.id == self.config.owner_id:
+            return True
+        if interaction.guild is not None:
+            member = interaction.guild.get_member(interaction.user.id)
+            return bool(member and member.guild_permissions.administrator)
+        return False
+
+    @role_income.command(name="set")
+    @app_commands.describe(
+        role="Role that receives income",
+        amount="Coins paid per claim",
+        interval="How often it can be claimed, e.g. 2h, 30m, 1d",
+    )
+    async def role_income_set(
+        self,
+        interaction: discord.Interaction,
+        role: discord.Role,
+        amount: int,
+        interval: str = "1h",
+    ):
+        """Set a role's income amount and claim interval."""
+        if not await self._is_admin(interaction):
+            return await interaction.response.send_message(
+                "You need administrator permission to manage role income.", ephemeral=True
+            )
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                "This command only works in servers.", ephemeral=True
+            )
+        if amount <= 0:
+            return await interaction.response.send_message(
+                "Income must be a positive number of coins.", ephemeral=True
+            )
+        if amount > 1_000_000:
+            return await interaction.response.send_message(
+                "Income cannot exceed 1,000,000 coins.", ephemeral=True
+            )
+        seconds = parse_duration(interval)
+        if seconds is None or seconds < 60:
+            return await interaction.response.send_message(
+                "Invalid interval. Use a duration like `30m`, `2h`, `1d` (min 1 minute).",
+                ephemeral=True,
+            )
+        if seconds > 30 * 86400:
+            return await interaction.response.send_message(
+                "Interval cannot exceed 30 days.", ephemeral=True
+            )
+        async with self.bot.get_session() as session:
+            await RoleIncomeService.set(
+                session, interaction.guild.id, role.id, amount, claim_interval=seconds
+            )
+            await AuditService.log(
+                session,
+                interaction.user.id,
+                "income_set",
+                f"{role.id} ({role.name}) = {amount} every {format_duration(seconds)}",
+                guild_id=interaction.guild.id,
+            )
+        embed = EmbedBuilder.success_embed(
+            "Role Income Set",
+            f"**{role.name}** pays {format_coins(amount)} every {format_duration(seconds)}.",
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @role_income.command(name="remove")
+    @app_commands.describe(role="Role to remove income from")
+    async def role_income_remove(self, interaction: discord.Interaction, role: discord.Role):
+        """Remove income from a role."""
+        if not await self._is_admin(interaction):
+            return await interaction.response.send_message(
+                "You need administrator permission to manage role income.", ephemeral=True
+            )
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                "This command only works in servers.", ephemeral=True
+            )
+        async with self.bot.get_session() as session:
+            removed = await RoleIncomeService.remove(session, interaction.guild.id, role.id)
+            if removed:
+                await AuditService.log(
+                    session,
+                    interaction.user.id,
+                    "income_remove",
+                    f"{role.id} ({role.name})",
+                    guild_id=interaction.guild.id,
+                )
+        if removed:
+            embed = EmbedBuilder.success_embed(
+                "Role Income Removed",
+                f"**{role.name}** no longer grants income.",
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            await interaction.response.send_message(
+                f"**{role.name}** has no configured income.", ephemeral=True
+            )
+
+    @role_income.command(name="list")
+    async def role_income_list(self, interaction: discord.Interaction):
+        """List all configured role incomes."""
+        if not await self._is_admin(interaction):
+            return await interaction.response.send_message(
+                "You need administrator permission to manage role income.", ephemeral=True
+            )
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                "This command only works in servers.", ephemeral=True
+            )
+        async with self.bot.get_session() as session:
+            rows = await RoleIncomeService.list_all(session, interaction.guild.id)
+        if not rows:
+            return await interaction.response.send_message(
+                "No income roles configured. Use `/role-income set` to add one.",
+                ephemeral=True,
+            )
+        lines = []
+        for row in rows:
+            role = interaction.guild.get_role(row.role_id)
+            label = role.name if role is not None else f"Role {row.role_id}"
+            lines.append(
+                f"**{label}** - {format_coins(row.amount)} "
+                f"every {format_duration(row.claim_interval or 3600)}"
+            )
+        embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
+        embed.set_footer(text="!collect pays your highest eligible income role")
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):

@@ -1,5 +1,5 @@
 """
-Progression service — daily streaks, prestige, reputation, and achievements.
+Progression service: daily streaks, prestige, reputation, and achievements.
 
 Achievements are defined in code and unlock permanently; unlock state is
 persisted in ``user_achievements``.
@@ -29,12 +29,18 @@ ACHIEVEMENTS: Dict[str, dict] = {
         "name": "First Steps",
         "desc": "Work for the first time",
     },
-    "criminal": {"name": "Criminal", "desc": "Commit your first crime",},
+    "criminal": {
+        "name": "Criminal",
+        "desc": "Commit your first crime",
+    },
     "master_thief": {
         "name": "Master Thief",
         "desc": "Successfully rob 10 times",
     },
-    "gambler": {"name": "Gambler", "desc": "Place your first gamble",},
+    "gambler": {
+        "name": "Gambler",
+        "desc": "Place your first gamble",
+    },
     "high_roller": {
         "name": "High Roller",
         "desc": "Gamble 10,000 coins in one bet",
@@ -43,8 +49,14 @@ ACHIEVEMENTS: Dict[str, dict] = {
         "name": "Shopaholic",
         "desc": "Make your first shop purchase",
     },
-    "collector": {"name": "Collector", "desc": "Own 5 different items",},
-    "explorer": {"name": "Explorer", "desc": "Search 5 times",},
+    "collector": {
+        "name": "Collector",
+        "desc": "Own 5 different items",
+    },
+    "explorer": {
+        "name": "Explorer",
+        "desc": "Search 5 times",
+    },
     "streak_3": {
         "name": "On Fire",
         "desc": "Reach a 3-day daily streak",
@@ -53,7 +65,10 @@ ACHIEVEMENTS: Dict[str, dict] = {
         "name": "Unstoppable",
         "desc": "Reach a 7-day daily streak",
     },
-    "rich": {"name": "Rich", "desc": "Reach 100,000 net worth",},
+    "rich": {
+        "name": "Rich",
+        "desc": "Reach 100,000 net worth",
+    },
     "millionaire": {
         "name": "Millionaire",
         "desc": "Reach 1,000,000 net worth",
@@ -106,9 +121,7 @@ class AchievementService:
         return list(
             (
                 await session.execute(
-                    select(UserAchievement.achievement_id).where(
-                        UserAchievement.user_id == user_id
-                    )
+                    select(UserAchievement.achievement_id).where(UserAchievement.user_id == user_id)
                 )
             ).scalars()
         )
@@ -202,9 +215,7 @@ class ProgressionService:
             wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
             now = utcnow()
 
-            if wallet.last_daily_at and (now - wallet.last_daily_at) < timedelta(
-                hours=24
-            ):
+            if wallet.last_daily_at and (now - wallet.last_daily_at) < timedelta(hours=24):
                 hours_left = 24 - (now - wallet.last_daily_at).total_seconds() / 3600
                 return (
                     False,
@@ -221,9 +232,7 @@ class ProgressionService:
 
             streak = wallet.daily_streak or 1
             bonus = min(streak, 7) * 25
-            reward = int(
-                (base_reward + bonus) * ProgressionService._prestige_multiplier(wallet)
-            )
+            reward = int((base_reward + bonus) * ProgressionService._prestige_multiplier(wallet))
 
             await EconomyUtils.add_money(
                 session, user_id, reward, "daily", f"Daily reward (streak {streak})"
@@ -239,9 +248,7 @@ class ProgressionService:
         async with lock_manager.for_user(user_id):
             wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
             now = utcnow()
-            if wallet.last_monthly_at and (now - wallet.last_monthly_at) < timedelta(
-                days=30
-            ):
+            if wallet.last_monthly_at and (now - wallet.last_monthly_at) < timedelta(days=30):
                 remaining = 30 - (now - wallet.last_monthly_at).days
                 return (
                     False,
@@ -250,9 +257,7 @@ class ProgressionService:
 
             reward = int(base_reward * ProgressionService._prestige_multiplier(wallet))
             wallet.last_monthly_at = now
-            await EconomyUtils.add_money(
-                session, user_id, reward, "monthly", "Monthly reward"
-            )
+            await EconomyUtils.add_money(session, user_id, reward, "monthly", "Monthly reward")
             await session.commit()
             return True, f"You claimed your monthly reward of **{reward:,} coins**!"
 
@@ -271,8 +276,7 @@ class ProgressionService:
             networth = (wallet.balance or 0) + (wallet.bank or 0)
             if networth < 1_000_000:
                 return False, (
-                    f"You need **1,000,000 net worth** to prestige"
-                    f"(you have {networth:,})."
+                    f"You need **1,000,000 net worth** to prestige(you have {networth:,})."
                 )
             wallet.prestige = (wallet.prestige or 0) + 1
             session.add(

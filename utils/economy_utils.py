@@ -55,7 +55,7 @@ class EconomyUtils:
         from_user_id: int,
         to_user_id: int,
         amount: int,
-        description: str = ""
+        description: str = "",
     ) -> bool:
         """Transfer money between users atomically."""
         if amount <= 0:
@@ -63,7 +63,7 @@ class EconomyUtils:
 
         # All changes happen inside the session's current transaction, so they
         # are committed (or rolled back) together by the caller's commit.
-        # NOTE: do NOT wrap this in `session.begin()` — the caller may already
+        # NOTE: do NOT wrap this in `session.begin()` the caller may already
         # have an active transaction (e.g. the `async with session:` context),
         # which would raise InvalidRequestError.
 
@@ -82,17 +82,17 @@ class EconomyUtils:
         # Record transactions
         sender_tx = Transaction(
             user_id=from_user_id,
-            type='transfer_out',
+            type="transfer_out",
             amount=-amount,
             description=description,
-            recipient_id=to_user_id
+            recipient_id=to_user_id,
         )
         receiver_tx = Transaction(
             user_id=to_user_id,
-            type='transfer_in',
+            type="transfer_in",
             amount=amount,
             description=description,
-            recipient_id=from_user_id
+            recipient_id=from_user_id,
         )
 
         session.add(sender_tx)
@@ -107,7 +107,7 @@ class EconomyUtils:
         amount: int,
         type_: str,
         description: str = "",
-        game: Optional[str] = None
+        game: Optional[str] = None,
     ) -> bool:
         """Add money to a user's wallet."""
         if amount < 0:
@@ -117,11 +117,7 @@ class EconomyUtils:
         wallet.balance += amount
 
         tx = Transaction(
-            user_id=user_id,
-            type=type_,
-            amount=amount,
-            description=description,
-            game=game
+            user_id=user_id, type=type_, amount=amount, description=description, game=game
         )
         session.add(tx)
 
@@ -134,7 +130,7 @@ class EconomyUtils:
         amount: int,
         type_: str,
         description: str = "",
-        game: Optional[str] = None
+        game: Optional[str] = None,
     ) -> bool:
         """Subtract money from a user's wallet."""
         if amount < 0:
@@ -147,23 +143,24 @@ class EconomyUtils:
         wallet.balance -= amount
 
         tx = Transaction(
-            user_id=user_id,
-            type=type_,
-            amount=-amount,
-            description=description,
-            game=game
+            user_id=user_id, type=type_, amount=-amount, description=description, game=game
         )
         session.add(tx)
 
         return True
 
     @staticmethod
-    def validate_bet_amount(config: Config, amount: int, user_daily_wagered: int) -> tuple[bool, str]:
+    def validate_bet_amount(
+        config: Config, amount: int, user_daily_wagered: int
+    ) -> tuple[bool, str]:
         """Validate a bet amount against limits."""
         if amount < config.min_bet:
             return False, f"Minimum bet is {config.min_bet} coins."
         if amount > config.max_bet:
             return False, f"Maximum bet is {config.max_bet} coins."
         if user_daily_wagered + amount > config.daily_wager_limit:
-            return False, f"Daily wager limit exceeded. You can wager {config.daily_wager_limit - user_daily_wagered} more coins today."
+            return (
+                False,
+                f"Daily wager limit exceeded. You can wager {config.daily_wager_limit - user_daily_wagered} more coins today.",
+            )
         return True, ""

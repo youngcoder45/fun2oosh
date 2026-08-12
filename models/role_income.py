@@ -1,9 +1,15 @@
 """
 Per-guild role income configuration.
 
-Administrators assign an hourly income to roles; `!collect` pays the
-highest eligible role's rate. No values are hardcoded — everything lives
-in the database and survives restarts.
+Administrators assign a coin amount and a claim interval to roles; `!collect`
+pays the highest eligible role's configured amount once per interval (e.g.
+every 2 hours). No values are hardcoded, everything lives in the database
+and survives restarts.
+
+The interval is a property of the role, not of the bot: one role can pay
+every 30 minutes, another once a week. Per-user claim timing is tracked in
+`role_claims` so intervals survive restarts and can be rendered as Discord
+relative timestamps (`<t:...:R>`).
 """
 
 from sqlalchemy import BigInteger, Integer
@@ -13,13 +19,17 @@ from .base import Base
 
 
 class RoleIncome(Base):
-    """Hourly income assigned to a role by a guild administrator."""
+    """Coins + claim interval assigned to a role by a guild administrator."""
 
-    __tablename__ = 'role_income'
+    __tablename__ = "role_income"
 
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    hourly_rate: Mapped[int] = mapped_column(Integer, default=0)
+    amount: Mapped[int] = mapped_column(Integer, default=0)
+    claim_interval: Mapped[int] = mapped_column(Integer, default=3600)  # seconds
 
     def __repr__(self) -> str:
-        return f"<RoleIncome(guild_id={self.guild_id}, role_id={self.role_id}, rate={self.hourly_rate})>"
+        return (
+            f"<RoleIncome(guild_id={self.guild_id}, role_id={self.role_id}, "
+            f"amount={self.amount}, interval={self.claim_interval}s)>"
+        )

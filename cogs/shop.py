@@ -116,9 +116,7 @@ class TradeOfferView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id not in (self.offer.initiator, self.offer.partner):
-            await interaction.response.send_message(
-                "This trade is not for you.", ephemeral=True
-            )
+            await interaction.response.send_message("This trade is not for you.", ephemeral=True)
             return False
         return True
 
@@ -228,7 +226,7 @@ class Shop(commands.Cog):
         pages: List[discord.Embed] = []
         per_page = 8
         for start in range(0, len(items), per_page):
-            chunk = items[start:start + per_page]
+            chunk = items[start : start + per_page]
             embed = discord.Embed(
                 title="Shop Catalog",
                 description=f"Category: **{category.title()}** • `!buy <id> [qty]`",
@@ -237,17 +235,19 @@ class Shop(commands.Cog):
             for item in chunk:
                 embed.add_field(
                     name=item.name,
-                    value=f"`{item.id}` — {format_coins(item.price)} ({item.rarity.title()})",
+                    value=f"`{item.id}` - {format_coins(item.price)} ({item.rarity.title()})",
                     inline=False,
                 )
             embed.set_footer(
-                text=f"Page {start // per_page + 1}/{ (len(items) - 1) // per_page + 1}"
+                text=f"Page {start // per_page + 1}/{(len(items) - 1) // per_page + 1}"
             )
             pages.append(embed)
         return pages
 
     @commands.hybrid_command(name="shop", aliases=["store"], description="Browse the item shop")
-    @app_commands.describe(category="Filter by category (tool, consumable, booster, crate, collectible, all)")
+    @app_commands.describe(
+        category="Filter by category (tool, consumable, booster, crate, collectible, all)"
+    )
     async def shop(self, ctx: commands.Context, category: Optional[str] = None):
         """Browse the item shop."""
         async with self.bot.get_session() as session:
@@ -255,9 +255,7 @@ class Shop(commands.Cog):
         categories = sorted({item.category for item in items})
         pages: Dict[str, List[discord.Embed]] = {"all": self._shop_pages(items)}
         for cat in categories:
-            pages[cat] = self._shop_pages(
-                [item for item in items if item.category == cat], cat
-            )
+            pages[cat] = self._shop_pages([item for item in items if item.category == cat], cat)
 
         view = ShopView(pages, owner_id=ctx.author.id, categories=categories)
         if category and category.lower() in pages:
@@ -294,7 +292,7 @@ class Shop(commands.Cog):
             if item.price <= 0:
                 return await ctx.send(f"**{item.name}** is not for sale.")
             if not item.stackable and qty != 1:
-                return await ctx.send("That item is not stackable — quantity must be 1.")
+                return await ctx.send("That item is not stackable, quantity must be 1.")
 
             total = item.price * qty
 
@@ -309,9 +307,9 @@ class Shop(commands.Cog):
                 session.add(
                     Transaction(
                         user_id=ctx.author.id,
-                        type='buy',
+                        type="buy",
                         amount=-total,
-                        description=f'Bought {item.name} x{qty}',
+                        description=f"Bought {item.name} x{qty}",
                     )
                 )
                 await session.commit()
@@ -322,7 +320,7 @@ class Shop(commands.Cog):
                 )
                 await ctx.send(embed=embed)
 
-            new = await AchievementService.check(session, ctx.author.id, 'buy')
+            new = await AchievementService.check(session, ctx.author.id, "buy")
             await self._announce_achievements(ctx, new)
 
     @commands.hybrid_command(name="sell", description="Sell an item from your inventory")
@@ -348,7 +346,7 @@ class Shop(commands.Cog):
                 if inv.quantity <= 0:
                     await session.delete(inv)
                 await EconomyUtils.add_money(
-                    session, ctx.author.id, total, 'sell', f'Sold {item.name} x{qty}'
+                    session, ctx.author.id, total, "sell", f"Sold {item.name} x{qty}"
                 )
                 await session.commit()
 
@@ -374,7 +372,7 @@ class Shop(commands.Cog):
             embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
-            new = await AchievementService.check(session, ctx.author.id, 'use')
+            new = await AchievementService.check(session, ctx.author.id, "use")
             await self._announce_achievements(ctx, new)
 
     # ------------------------------------------------------------- inventory
@@ -401,7 +399,7 @@ class Shop(commands.Cog):
                 title=f"{target.display_name}'s Inventory",
                 color=COLOR_INFO,
             )
-            for inv, item in rows[start:start + per_page]:
+            for inv, item in rows[start : start + per_page]:
                 embed.add_field(
                     name=item.name,
                     value=(
@@ -410,7 +408,7 @@ class Shop(commands.Cog):
                     ),
                     inline=False,
                 )
-            embed.set_footer(text=f"Page {start // per_page + 1}/{ (len(rows) - 1) // per_page + 1}")
+            embed.set_footer(text=f"Page {start // per_page + 1}/{(len(rows) - 1) // per_page + 1}")
             pages.append(embed)
 
         view = PaginationView(pages, owner_id=ctx.author.id)
@@ -418,7 +416,7 @@ class Shop(commands.Cog):
 
     # ------------------------------------------------------------------ gift
 
-    @commands.command(name='giveitem', aliases=['giftitem'])
+    @commands.command(name="giveitem", aliases=["giftitem"])
     async def giveitem(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
         """Give items to another user."""
         if user == ctx.author:
@@ -454,7 +452,7 @@ class Shop(commands.Cog):
                 return offer
         return None
 
-    @commands.command(name='trade', aliases=['exchange'])
+    @commands.command(name="trade", aliases=["exchange"])
     async def trade(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
         """Trade items with another user.
 
@@ -537,9 +535,7 @@ class Shop(commands.Cog):
     async def _announce_achievements(ctx: commands.Context, new_achievements: List[dict]) -> None:
         if not new_achievements:
             return
-        lines = "\n".join(
-            f"**{a['name']}** — {a['desc']}" for a in new_achievements
-        )
+        lines = "\n".join(f"**{a['name']}** - {a['desc']}" for a in new_achievements)
         embed = discord.Embed(
             title="Achievements Unlocked!",
             description=lines,

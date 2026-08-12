@@ -64,7 +64,7 @@ class Activities(commands.Cog):
 
             if random.random() < success_rate:
                 final = await EconomyService.reward(
-                    session, ctx.author.id, int(reward * tool_mult), key, f'{key.title()} reward'
+                    session, ctx.author.id, int(reward * tool_mult), key, f"{key.title()} reward"
                 )
                 embed = EmbedBuilder.success_embed(
                     "Success!",
@@ -81,32 +81,32 @@ class Activities(commands.Cog):
         await ctx.send(embed=embed)
         await self._announce_achievements(ctx, new)
 
-    @commands.command(name='hunt')
-    @check_cooldown('hunt', 45)
+    @commands.command(name="hunt")
+    @check_cooldown("hunt", 45)
     async def hunt(self, ctx: commands.Context):
         """Hunt for wild game. 60% success, earn 30-180 coins (more with a rifle)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
-        await self._run_activity(ctx, 'hunt')
+        await self._run_activity(ctx, "hunt")
 
-    @commands.command(name='fish', aliases=['fishing'])
-    @check_cooldown('fish', 45)
+    @commands.command(name="fish", aliases=["fishing"])
+    @check_cooldown("fish", 45)
     async def fish(self, ctx: commands.Context):
         """Go fishing. 55% success, earn 20-150 coins (more with a rod)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
-        await self._run_activity(ctx, 'fish')
+        await self._run_activity(ctx, "fish")
 
-    @commands.command(name='mine', aliases=['mining'])
-    @check_cooldown('mine', 60)
+    @commands.command(name="mine", aliases=["mining"])
+    @check_cooldown("mine", 60)
     async def mine(self, ctx: commands.Context):
         """Mine for ore. 50% success, earn 40-250 coins (more with a pickaxe)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
-        await self._run_activity(ctx, 'mine')
+        await self._run_activity(ctx, "mine")
 
-    @commands.command(name='slut', aliases=['hustle'])
-    @check_cooldown('slut', 300)
+    @commands.command(name="slut", aliases=["hustle"])
+    @check_cooldown("slut", 300)
     async def slut(self, ctx: commands.Context):
         """Take a risky hustle. 45% success, earn 100-500, or pay a fine if caught."""
         if guard := await self._guard_error(ctx):
@@ -115,7 +115,9 @@ class Activities(commands.Cog):
         async with self.bot.get_session() as session:
             if random.random() < SLUT_SUCCESS:
                 reward = random.randint(SLUT_MIN, SLUT_MAX)
-                final = await EconomyService.reward(session, ctx.author.id, reward, 'slut', 'Slut success')
+                final = await EconomyService.reward(
+                    session, ctx.author.id, reward, "slut", "Slut success"
+                )
                 embed = EmbedBuilder.success_embed(
                     "Success!",
                     f"You hustled and earned {format_coins(final)}!",
@@ -123,7 +125,7 @@ class Activities(commands.Cog):
             else:
                 fine = random.randint(SLUT_FINE_MIN, SLUT_FINE_MAX)
                 paid = await EconomyService.subtract(
-                    session, ctx.author.id, fine, 'slut', 'Caught — fine paid'
+                    session, ctx.author.id, fine, "slut", "Caught, fine paid"
                 )
                 if paid:
                     embed = discord.Embed(
@@ -137,20 +139,20 @@ class Activities(commands.Cog):
                         description="You were caught, but you had no coins to pay the fine!",
                         color=discord.Color.red(),
                     )
-            new = await AchievementService.check(session, ctx.author.id, 'slut')
+            new = await AchievementService.check(session, ctx.author.id, "slut")
         await ctx.send(embed=embed)
         await self._announce_achievements(ctx, new)
 
     # ---------------------------------------------------------------- monthly
 
-    @commands.command(name='monthly', aliases=['month'])
+    @commands.command(name="monthly", aliases=["month"])
     async def monthly(self, ctx: commands.Context):
         """Claim your monthly reward! 30-day cooldown."""
         async with self.bot.get_session() as session:
             base = self.config.monthly_reward
             if ctx.guild is not None:
                 guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
-                base = GuildConfigService.effective(guild_cfg, self.config, 'monthly_reward')
+                base = GuildConfigService.effective(guild_cfg, self.config, "monthly_reward")
 
             ok, msg = await ProgressionService.apply_monthly(session, ctx.author.id, base)
         if ok:
@@ -161,7 +163,7 @@ class Activities(commands.Cog):
 
     # ---------------------------------------------------------------- networth
 
-    @commands.command(name='networth', aliases=['net'])
+    @commands.command(name="networth", aliases=["net"])
     async def networth(self, ctx: commands.Context, user: Optional[discord.User] = None):
         """View your total net worth (wallet + bank + inventory)."""
         target = user or ctx.author
@@ -182,8 +184,8 @@ class Activities(commands.Cog):
 
     # ------------------------------------------------------------ reputation
 
-    @commands.command(name='rep', aliases=['reputation'])
-    @check_cooldown('rep', 43200) # 12 hours per giver
+    @commands.command(name="rep", aliases=["reputation"])
+    @check_cooldown("rep", 43200)  # 12 hours per giver
     async def rep(self, ctx: commands.Context, user: discord.User):
         """Give reputation to a user (12h cooldown)."""
         if ctx.guild is None:
@@ -200,13 +202,13 @@ class Activities(commands.Cog):
 
         embed = EmbedBuilder.success_embed(
             "Reputation Given!",
-            f"You gave a reputation point to {user.mention} — they now have **{count}**.",
+            f"You gave a reputation point to {user.mention} , they now have **{count}**.",
         )
         await ctx.send(embed=embed)
 
     # ---------------------------------------------------------- achievements
 
-    @commands.command(name='achievements', aliases=['ach', 'badges'])
+    @commands.command(name="achievements", aliases=["ach", "badges"])
     async def achievements(self, ctx: commands.Context, user: Optional[discord.User] = None):
         """View your unlocked achievements."""
         target = user or ctx.author
@@ -222,7 +224,7 @@ class Activities(commands.Cog):
             done = aid in unlocked
             embed.add_field(
                 name=f"{'UNLOCKED' if done else 'LOCKED'} {meta['name']}",
-                value=f"{meta['desc']}" if done else f"Locked — {meta['desc']}",
+                value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
                 inline=False,
             )
         await ctx.send(embed=embed)
@@ -233,9 +235,7 @@ class Activities(commands.Cog):
     async def _announce_achievements(ctx: commands.Context, new_achievements: List[dict]) -> None:
         if not new_achievements:
             return
-        lines = "\n".join(
-            f"**{a['name']}** — {a['desc']}" for a in new_achievements
-        )
+        lines = "\n".join(f"**{a['name']}** - {a['desc']}" for a in new_achievements)
         embed = EmbedBuilder.gold_embed("Achievements Unlocked!", lines)
         await ctx.send(embed=embed)
 

@@ -73,42 +73,64 @@ footers, and all footers on work/daily/collect/crime/deposit/withdraw results.
 
 ---
 
-## 3. Collect System Redesign
+## 3. Collect System Redesign (role income)
 
 ### Old system (removed)
-`collect` paid a flat `collect_reward` amount on a cooldown — identical to
-`work`, no progression, no server customization, no role incentive.
+`collect` paid a flat `collect_reward` amount on a global cooldown — identical
+in feel to `work`, with no role incentive and no server customization.
 
-### New system: role-income based
-Administrators assign an hourly income to roles (`!income add <role> <amount>`).
+### New system: role income with per-role claim intervals
+Administrators configure income per role — **amount** and **claim interval** —
+via the `/role-income` slash group (or `!income` prefix group):
+
+```
+/role-income set <role> <amount> [interval]   e.g. interval: 2h / 30m / 1d
+/role-income remove <role>
+/role-income list
+```
+
 When a user runs `collect`:
 
-1. The cog resolves the guild config (per-guild override of `collect_reward`).
-2. `RoleIncomeService.highest_for(guild, user_role_ids)` finds the highest-paying
-   income row among the roles the user holds.
-3. If none exists, the base `collect_reward` rate is paid (labeled `Base rate`).
-4. The cooldown is enforced per user via the existing `cooldown_manager`.
+1. `RoleIncomeService.highest_for(guild, user_role_ids)` finds the highest-
+   paying income role the user holds. No role → clear "ask an admin" message;
+   **no flat fallback payout** (the old `collect_reward` setting was removed).
+2. The **role's own claim interval** is checked against the user's last claim
+   for that role, persisted in the new `role_claims` table — windows survive
+   bot restarts (in-memory cooldowns would reset them).
+3. If the window has passed, the configured amount is paid and the claim is
+   recorded. Otherwise the user gets a Discord **relative timestamp** telling
+   them exactly when they can claim again.
 
 **Payout rule chosen: highest eligible role.** Rationale:
 
 - **Predictable economy.** Combined payouts stack multiplicatively with role
-  count and silently double economies as servers add roles. Highest-rate keeps
-  the rate ceiling visible and auditable.
+  count and silently double economies as servers add roles. Highest-amount
+  keeps the payout ceiling visible and auditable.
 - **Matches role-tier mental models.** Servers model VIP > Premium > Member;
   "highest eligible" matches the hierarchy admins intend.
 - **Simpler to balance.** One number per role, one winner per collect.
 - **No exploit surface.** Combined payouts reward stacking throwaway roles;
-  highest-rate rewards progression into a single better role.
+  highest-amount rewards progression into a single better role.
 
-### Collect embed (minimal, distinct from work)
+### Collect embed (minimal — an admin-granted claim, not a job)
 ```
-Passive Income              [success green]
-  Income Source : VIP                Balance: 12,480 coins
-  Amount Earned : 750 coins
-  Next claim    : in 23m 14s
+Role Income Claim           [success green]
+  Income Source : VIP                Amount Earned : 750 coins
+  Balance       : 12,480 coins
+  Next Claim    : <t:1730000000:R>   → renders "in 2 hours"
 ```
-Exactly four fields: source role, amount earned, updated balance, next claim.
-No decorative emoji, no footer, no description — passive income, not a job.
+Exactly four fields: source role, amount earned (as configured by the admin),
+updated balance, and next claim as a Discord relative timestamp. No footer,
+no decorative emoji, no description — a role perk, not another `work`.
+
+### Database changes
+
+| Table | Change |
+| --- | --- |
+| `role_income` | `hourly_rate` renamed to `amount` (per-interval, not hourly); new `claim_interval` column (seconds, default 3600). Migration handles legacy DBs. |
+| `role_claims` (new) | `(guild_id, user_id, role_id, claimed_at)` composite PK — persists per-user claim timing across restarts. |
+
+`!reset_economy` now also clears `role_claims`.
 
 ---
 
@@ -134,27 +156,31 @@ success/failure responses — one-shot results with no follow-up interaction.
 
 | Table | Change |
 | --- | --- |
-| `role_income` (new) | `guild_id` (BigInt, PK, indexed), `role_id` (BigInt, PK), `hourly_rate` (Int). Persists all income configuration — nothing hardcoded, survives restarts. |
+| `role_income` (new) | `guild_id` (BigInt, PK, indexed), `role_id` (BigInt, PK), `amount` (Int), `claim_interval` (Int seconds). Persists all income configuration — nothing hardcoded, survives restarts. |
+| `role_claims` (new) | Per-user claim timing so intervals survive restarts. |
 
 Migration: `utils/migrations.py` creates `role_income` idempotently for
-existing databases; `Base.metadata.create_all` handles fresh installs.
-`!reset_economy` now also clears the new `role_income` table.
+existing databases (renaming the legacy `hourly_rate` column to `amount` and
+adding `claim_interval`); `Base.metadata.create_all` handles fresh installs.
+`!reset_economy` clears both tables.
 
 ---
 
 ## 6. Admin Commands Added
 
-New `!income` group (manage_permissions required):
+Slash group `/role-income` and prefix group `!income` (administrator
+permission required):
 
 | Command | Action |
 | --- | --- |
-| `!income add <role> <amount>` | Set/overwrite hourly income for a role |
-| `!income set <role> <amount>` | Alias for add (edit) |
-| `!income remove <role>` | Remove a role's income rate |
-| `!income list` | List all configured incomes, highest first |
+| `/role-income set <role> <amount> [interval]` | Set/overwrite role income with claim window (e.g. `2h`, `30m`, `1d`) |
+| `/role-income remove <role>` | Remove a role's income |
+| `/role-income list` | List configured incomes + intervals, highest first |
+| `!income add/set <role> <amount> [interval]` | Prefix equivalents |
 
 All changes are written to the database and recorded in the audit log
-(`!audit`). Values validated (positive, ≤ 1,000,000/hour).
+(`!audit`). Values validated (positive amount ≤ 1,000,000; interval between
+1 minute and 30 days).
 
 ---
 

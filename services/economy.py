@@ -1,5 +1,5 @@
 """
-Economy service — the single, lock-aware entry point for money operations.
+Economy service: the single, lock-aware entry point for money operations.
 
 All methods acquire per-user locks internally so callers cannot corrupt
 balances through concurrent commands. Money is only ever mutated through this
@@ -71,7 +71,9 @@ class EconomyService:
         if amount <= 0:
             return False
         async with lock_manager.for_user(user_id):
-            ok = await EconomyUtils.subtract_money(session, user_id, amount, type_, description, game)
+            ok = await EconomyUtils.subtract_money(
+                session, user_id, amount, type_, description, game
+            )
             if ok:
                 await session.commit()
             return ok
@@ -114,7 +116,7 @@ class EconomyService:
             session.add(
                 Transaction(
                     user_id=sender_id,
-                    type='transfer_out',
+                    type="transfer_out",
                     amount=-amount,
                     description=f"{description} → {receiver_id}{tax_note}",
                     recipient_id=receiver_id,
@@ -123,7 +125,7 @@ class EconomyService:
             session.add(
                 Transaction(
                     user_id=receiver_id,
-                    type='transfer_in',
+                    type="transfer_in",
                     amount=received,
                     description=f"{description} ← {sender_id}",
                     recipient_id=sender_id,

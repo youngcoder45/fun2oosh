@@ -1,5 +1,5 @@
 """
-Guild configuration service — per-server economy overrides and audit logging.
+Guild configuration service: per-server economy overrides and audit logging.
 """
 
 import logging
@@ -15,18 +15,17 @@ logger = logging.getLogger(__name__)
 
 # key -> (python_type, min, max, friendly label)
 SETTINGS: dict = {
-    'work_reward': ('int', 1, 1_000_000, 'work reward'),
-    'daily_reward': ('int', 1, 10_000_000, 'daily reward'),
-    'weekly_reward': ('int', 1, 50_000_000, 'weekly reward'),
-    'monthly_reward': ('int', 1, 200_000_000, 'monthly reward'),
-    'collect_reward': ('int', 1, 1_000_000, 'hourly collect reward (fallback)'),
-    'tax_rate': ('float', 0, 0.5, 'transfer tax rate'),
-    'min_bet': ('int', 1, 1_000_000_000, 'minimum bet'),
-    'max_bet': ('int', 1, 1_000_000_000, 'maximum bet'),
-    'daily_wager_limit': ('int', 1, 1_000_000_000, 'daily wager limit'),
-    'passive_income': ('int', 0, 1_000_000, 'hourly passive income'),
-    'anti_alt': ('bool', None, None, 'anti-alt protection'),
-    'min_account_age_days': ('int', 0, 365, 'minimum account age (days)'),
+    "work_reward": ("int", 1, 1_000_000, "work reward"),
+    "daily_reward": ("int", 1, 10_000_000, "daily reward"),
+    "weekly_reward": ("int", 1, 50_000_000, "weekly reward"),
+    "monthly_reward": ("int", 1, 200_000_000, "monthly reward"),
+    "tax_rate": ("float", 0, 0.5, "transfer tax rate"),
+    "min_bet": ("int", 1, 1_000_000_000, "minimum bet"),
+    "max_bet": ("int", 1, 1_000_000_000, "maximum bet"),
+    "daily_wager_limit": ("int", 1, 1_000_000_000, "daily wager limit"),
+    "passive_income": ("int", 0, 1_000_000, "hourly passive income"),
+    "anti_alt": ("bool", None, None, "anti-alt protection"),
+    "min_account_age_days": ("int", 0, 365, "minimum account age (days)"),
 }
 
 
@@ -55,10 +54,15 @@ class GuildConfigService:
 
     @staticmethod
     async def set(
-        session: AsyncSession, guild_id: int, key: str, raw_value: str, defaults: Optional[Config] = None
+        session: AsyncSession,
+        guild_id: int,
+        key: str,
+        raw_value: str,
+        defaults: Optional[Config] = None,
     ) -> Tuple[bool, str]:
         """Validate and set a setting. Returns ``(success, message)``."""
         from utils.config import Config as _Config
+
         if defaults is None:
             defaults = _Config()
         if key not in SETTINGS:
@@ -67,9 +71,9 @@ class GuildConfigService:
 
         value: int | float
         try:
-            if kind == 'bool':
-                value = raw_value.strip().lower() in ('1', 'true', 'yes', 'on')
-            elif kind == 'float':
+            if kind == "bool":
+                value = raw_value.strip().lower() in ("1", "true", "yes", "on")
+            elif kind == "float":
                 value = float(raw_value)
             else:
                 value = int(raw_value)
@@ -86,12 +90,12 @@ class GuildConfigService:
         setattr(row, key, value)
 
         # Cross-field validation: min_bet must not exceed max_bet
-        if key == 'min_bet':
+        if key == "min_bet":
             max_bet = row.max_bet if row.max_bet is not None else defaults.max_bet
             if value > max_bet:
                 setattr(row, key, old)
                 return False, f"`min_bet` cannot exceed `max_bet` ({max_bet})."
-        if key == 'max_bet':
+        if key == "max_bet":
             min_bet = row.min_bet if row.min_bet is not None else defaults.min_bet
             if value < min_bet:
                 setattr(row, key, old)

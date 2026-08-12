@@ -54,7 +54,7 @@ class Fun2OoshBot(commands.Bot):
         )
 
         intents = discord.Intents.default()
-        intents.message_content = True # Needed for prefix commands
+        intents.message_content = True  # Needed for prefix commands
 
         super().__init__(
             command_prefix=commands.when_mentioned_or(config.command_prefix),
@@ -98,7 +98,7 @@ class Fun2OoshBot(commands.Bot):
         try:
             synced = await self.tree.sync()
             logger.info("Synced %d slash command(s)", len(synced))
-        except Exception as exc: # noqa: BLE001 - never crash startup over sync
+        except Exception as exc:  # noqa: BLE001 - never crash startup over sync
             logger.warning("Could not sync slash commands: %s", exc)
 
     async def on_ready(self) -> None:
@@ -118,7 +118,7 @@ class Fun2OoshBot(commands.Bot):
                 return
             usage = f"{ctx.prefix}{ctx.command.name}"
             if ctx.command.params:
-                params = [p for p in ctx.command.clean_params if p != 'ctx']
+                params = [p for p in ctx.command.clean_params if p != "ctx"]
                 if params:
                     usage += " " + " ".join(f"<{p}>" for p in params)
             await ctx.send(f"Missing argument: `{error.param.name}`\nUsage: `{usage}`")
@@ -178,7 +178,9 @@ class Fun2OoshBot(commands.Bot):
 
         logger.error(
             "Unhandled error in app command '%s': %s",
-            interaction.command, exc, exc_info=exc,
+            interaction.command,
+            exc,
+            exc_info=exc,
         )
         try:
             await interaction.response.send_message(
@@ -197,7 +199,7 @@ class Fun2OoshBot(commands.Bot):
             while not self.is_closed():
                 try:
                     await self._pay_passive_income()
-                except Exception as exc: # noqa: BLE001 - keep the loop alive
+                except Exception as exc:  # noqa: BLE001 - keep the loop alive
                     logger.exception("Passive income payment failed: %s", exc)
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
@@ -219,23 +221,26 @@ class Fun2OoshBot(commands.Bot):
                 wallets = {
                     w.user_id: w
                     for w in (
-                        await session.execute(
-                            select(Wallet).where(Wallet.user_id.in_(member_ids))
-                        )
+                        await session.execute(select(Wallet).where(Wallet.user_id.in_(member_ids)))
                     ).scalars()
                 }
                 for user_id in member_ids:
                     wallet = wallets.get(user_id)
                     if wallet is None:
-                        continue # only pay users who have engaged with the economy
-                    if wallet.last_passive_at and (now - wallet.last_passive_at).total_seconds() < 3600:
+                        continue  # only pay users who have engaged with the economy
+                    if (
+                        wallet.last_passive_at
+                        and (now - wallet.last_passive_at).total_seconds() < 3600
+                    ):
                         continue
                     wallet.balance = (wallet.balance or 0) + rate
                     wallet.last_passive_at = now
                     session.add(
                         Transaction(
-                            user_id=user_id, type='passive', amount=rate,
-                            description='Hourly passive income',
+                            user_id=user_id,
+                            type="passive",
+                            amount=rate,
+                            description="Hourly passive income",
                         )
                     )
                 await session.commit()
@@ -243,7 +248,7 @@ class Fun2OoshBot(commands.Bot):
 
     async def close(self) -> None:
         """Stop background tasks and dispose the database engine on shutdown."""
-        task = getattr(self, '_passive_income_task', None)
+        task = getattr(self, "_passive_income_task", None)
         if task is not None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -262,7 +267,7 @@ def main() -> None:
     config = Config()
 
     token = config.discord_token.strip()
-    if not token or token in ('demo_token', 'your_token_here', 'YOUR_TOKEN_HERE'):
+    if not token or token in ("demo_token", "your_token_here", "YOUR_TOKEN_HERE"):
         print(
             "\n No Discord bot token configured.\n"
             "1. Create a bot application at https://discord.com/developers/applications\n"
@@ -279,7 +284,7 @@ def main() -> None:
         bot.run(token, log_handler=None)
     except discord.LoginFailure:
         logger.error(
-            "Login failed — your DISCORD_TOKEN is invalid. Double-check the token "
+            "Login failed -> your DISCORD_TOKEN is invalid. Double-check the token "
             "in your .env file and try again."
         )
         sys.exit(1)
