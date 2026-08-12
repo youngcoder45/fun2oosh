@@ -109,7 +109,7 @@ configured interval (VIP every 2h, Member every hour — holding both pays both)
 
 ### Collect embed (minimal — an admin-granted claim, not a job)
 ```
-Role Income Claim           [success green]
+[pfp] Alice                    [success green]
   Income Sources:                       Total Earned: 950 coins
     VIP — +750 coins
     Member — +200 coins
@@ -263,10 +263,11 @@ and the second as an absolute time ("January 1, 2027 5:00 PM").
   - `bot.py` prefix + slash `CommandOnCooldown` handlers (slash work/daily/
     weekly and any `app_commands.checks.cooldown`)
   - `cogs/casino.py` blackjack cooldown
-- `services/progression.py` daily/monthly — the DB-backed cooldowns compute
-  the expiry from the stored `last_daily_at`/`last_monthly_at` plus the
-  interval and reuse the same notice (DB already stores claim times, so no
-  schema change was needed).
+- `services/progression.py` daily/weekly/monthly — the DB-backed cooldowns
+  compute the expiry from the stored `last_daily_at`/`last_weekly_at`/
+  `last_monthly_at` plus the interval and reuse the same notice. Weekly was
+  previously an in-memory cooldown (it reset on restart); it now persists
+  like daily/monthly via a new `last_weekly_at` column (auto-migrated).
 - `!collect` role-income cooldown message uses the same `<t:R>`/`<t:F>` pair.
 
 ### What was removed
@@ -319,7 +320,7 @@ You repaired three motorcycles and earned 142 coins.
 - `EmbedBuilder.activity_embed(description, *, color, user)` — the single
   builder behind all activity embeds; it derives the author name and avatar
   from the passed user.
-- `!collect` also dropped its Balance field — the claim embed shows the
-  breakdown, total earned, and next claim only.
+- `!collect` uses the same actor author header (name + pfp, no title) and
+  shows the breakdown, total earned, and next claim only — no balance field.
 - Casino result embeds (e.g. coinflip) keep a New Balance field — gambling
   results, not activity commands.

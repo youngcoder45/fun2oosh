@@ -151,7 +151,7 @@ class Economy(commands.Cog):
                 f"Try again <t:{next_ts}:R>\n"
                 f"Available at <t:{next_ts}:F>"
             )
-        embed = self._collect_embed(breakdown, earned, next_ts)
+        embed = self._collect_embed(breakdown, earned, next_ts, ctx.author)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="collect", description="Claim your role income")
@@ -184,7 +184,7 @@ class Economy(commands.Cog):
                 f"Available at <t:{next_ts}:F>",
                 ephemeral=True,
             )
-        embed = self._collect_embed(breakdown, earned, next_ts)
+        embed = self._collect_embed(breakdown, earned, next_ts, interaction.user)
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="daily", aliases=["d"])
@@ -234,52 +234,34 @@ class Economy(commands.Cog):
         await self._announce_achievements(ctx=interaction, new=new)
 
     @commands.command(name="weekly", aliases=["week"])
-    @check_cooldown("weekly", 604800)  # 7 days
     async def weekly(self, ctx: commands.Context):
         """Claim your weekly reward! 7-day cooldown for big bonus."""
-        base = self.config.weekly_reward
-        if ctx.guild is not None:
-            async with self.bot.get_session() as session:
+        async with self.bot.get_session() as session:
+            base = self.config.weekly_reward
+            if ctx.guild is not None:
                 guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
                 base = GuildConfigService.effective(guild_cfg, self.config, "weekly_reward")
-
-        async with self.bot.get_session() as session:
-            async with lock_manager.for_user(ctx.author.id):
-                wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
-                reward = int(base * ProgressionService._prestige_multiplier(wallet))
-                await EconomyUtils.add_money(
-                    session, ctx.author.id, reward, "weekly", "Weekly reward"
-                )
-                await session.commit()
-
-        embed = EmbedBuilder.success_embed(
-            "Weekly Reward Claimed!", f"You claimed your weekly reward of {format_coins(reward)}!"
-        )
-        await ctx.send(embed=embed)
+            ok, msg = await ProgressionService.apply_weekly(session, ctx.author.id, base)
+        if ok:
+            embed = EmbedBuilder.success_embed("Weekly Reward Claimed!", msg)
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(msg)
 
     @app_commands.command(name="weekly", description="Claim weekly reward")
-    @app_commands.checks.cooldown(1, 604800, key=lambda i: (i.guild_id, i.user.id))
     async def weekly_slash(self, interaction: discord.Interaction):
         """Slash command for weekly."""
-        base = self.config.weekly_reward
-        if interaction.guild is not None:
-            async with self.bot.get_session() as session:
+        async with self.bot.get_session() as session:
+            base = self.config.weekly_reward
+            if interaction.guild is not None:
                 guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
                 base = GuildConfigService.effective(guild_cfg, self.config, "weekly_reward")
-
-        async with self.bot.get_session() as session:
-            async with lock_manager.for_user(interaction.user.id):
-                wallet = await EconomyUtils.get_or_create_wallet(session, interaction.user.id)
-                reward = int(base * ProgressionService._prestige_multiplier(wallet))
-                await EconomyUtils.add_money(
-                    session, interaction.user.id, reward, "weekly", "Weekly reward"
-                )
-                await session.commit()
-
-        embed = EmbedBuilder.success_embed(
-            "Weekly Reward Claimed!", f"You claimed your weekly reward of {format_coins(reward)}!"
-        )
-        await interaction.response.send_message(embed=embed)
+            ok, msg = await ProgressionService.apply_weekly(session, interaction.user.id, base)
+        if ok:
+            embed = EmbedBuilder.success_embed("Weekly Reward Claimed!", msg)
+            await interaction.response.send_message(embed=embed)
+        else:
+            await interaction.response.send_message(msg)
 
     @commands.command(name="deposit", aliases=["dep"])
     async def deposit(self, ctx: commands.Context, amount: str):
@@ -1187,10 +1169,11 @@ class Economy(commands.Cog):
 
     @staticmethod
     def _collect_embed(
-        breakdown: List[Tuple[str, int]], amount: int, next_ts: int
+        breakdown: List[Tuple[str, int]], amount: int, next_ts: int, user
     ) -> discord.Embed:
-        """Role-income embed: per-role breakdown, total earned, next claim."""
-        embed = discord.Embed(title="Role Income Claim", color=COLOR_SUCCESS)
+        """Role-income embed: author = actor, per-role breakdown, next claim."""
+        embed = discord.Embed(color=COLOR_SUCCESS)
+        EmbedBuilder.set_author_from_user(embed, user)
         if len(breakdown) == 1:
             source, earned = breakdown[0]
             embed.add_field(name="Income Source", value=source, inline=True)

@@ -149,6 +149,16 @@ class EmbedBuilder:
         )
 
     @staticmethod
+    def set_author_from_user(embed: discord.Embed, user) -> None:
+        """Set the embed author line from a user (display name + avatar)."""
+        name = getattr(user, "display_name", None) or str(user)
+        avatar = getattr(user, "display_avatar", None)
+        if avatar is not None:
+            embed.set_author(name=name, icon_url=avatar.url)
+        else:
+            embed.set_author(name=name)
+
+    @staticmethod
     def activity_embed(
         description: str,
         *,
@@ -163,12 +173,7 @@ class EmbedBuilder:
         """
         embed = discord.Embed(description=description, color=color)
         if user is not None:
-            name = getattr(user, "display_name", None) or str(user)
-            avatar = getattr(user, "display_avatar", None)
-            if avatar is not None:
-                embed.set_author(name=name, icon_url=avatar.url)
-            else:
-                embed.set_author(name=name)
+            EmbedBuilder.set_author_from_user(embed, user)
         return embed
 
     @staticmethod

@@ -243,6 +243,28 @@ class ProgressionService:
             return True, "", reward, streak
 
     @staticmethod
+    async def apply_weekly(
+        session: AsyncSession, user_id: int, base_reward: int
+    ) -> Tuple[bool, str]:
+        """Claim the weekly reward (DB-backed 7-day cooldown).
+
+        Persisted via ``wallet.last_weekly_at`` so the cooldown survives bot
+        restarts, exactly like daily/monthly. Returns ``(success, message)``.
+        """
+        async with lock_manager.for_user(user_id):
+            wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
+            now = utcnow()
+            if wallet.last_weekly_at and (now - wallet.last_weekly_at) < timedelta(days=7):
+                ready_at = unix_ts(wallet.last_weekly_at + timedelta(days=7))
+                return False, cooldown_notice("Weekly reward", ready_at - unix_ts(now))
+
+            reward = int(base_reward * ProgressionService._prestige_multiplier(wallet))
+            wallet.last_weekly_at = now
+            await EconomyUtils.add_money(session, user_id, reward, "weekly", "Weekly reward")
+            await session.commit()
+            return True, f"You claimed your weekly reward of **{reward:,} coins**!"
+
+    @staticmethod
     async def apply_monthly(
         session: AsyncSession, user_id: int, base_reward: int
     ) -> Tuple[bool, str]:

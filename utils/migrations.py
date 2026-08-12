@@ -25,6 +25,7 @@ COLUMN_MIGRATIONS: Dict[str, List[Tuple[str, str]]] = {
         ('reputation', 'INTEGER DEFAULT 0'),
         ('daily_streak', 'INTEGER DEFAULT 0'),
         ('last_daily_at', 'DATETIME'),
+        ('last_weekly_at', 'DATETIME'),
         ('last_monthly_at', 'DATETIME'),
         ('last_passive_at', 'DATETIME'),
     ],

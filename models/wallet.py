@@ -31,6 +31,7 @@ class Wallet(Base):
     reputation: Mapped[int] = mapped_column(Integer, default=0)
     daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_daily_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_weekly_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_monthly_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_passive_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
