@@ -48,6 +48,16 @@ def format_coins(amount) -> str:
         return f"{amount} coins"
 
 
+def event_names(user, guild) -> Tuple[str, str]:
+    """Resolve a user/guild pair into event placeholders ``(user, guild)``.
+
+    Guild falls back to the user's name so commands also work in DMs.
+    """
+    user_name = getattr(user, "display_name", None) or str(user)
+    guild_name = getattr(guild, "name", None) or user_name
+    return user_name, guild_name
+
+
 def responsible_gaming_notice() -> str:
     """Short responsible gambling notice used as a casino embed footer."""
     return (

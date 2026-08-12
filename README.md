@@ -11,7 +11,7 @@ See `AUDIT.md` for the full feature-parity audit, database changes, and security
 ### Economy (`cogs/economy.py`)
 - `!balance` / `/balance` — wallet & bank overview
 - `!work`, `!collect`, `!daily` (with streaks), `!weekly`, `!monthly` — recurring income
-- `!beg`, `!search`, `!crime`, `!rob`, `!hunt`, `!fish`, `!mine`, `!slut` — risky money makers
+- `!beg`, `!search`, `!crime`, `!rob`, `!hunt`, `!fish`, `!mine` — risky money makers
 - `!deposit` / `!withdraw` — move money between wallet and bank
 - `!transfer` / `!give` — send coins to other users (per-guild transfer tax optional)
 - `!gamble` — quick coinflip-style bet
@@ -97,7 +97,7 @@ cogs/
   economy.py           # Wallet / income / progression commands
   casino.py            # Gambling games
   shop.py              # Shop, inventory, trading, crates
-  activities.py        # hunt/fish/mine/slut, monthly, networth, rep, achievements
+  activities.py        # hunt/fish/mine, monthly, networth, rep, achievements
   admin_economy.py     # Admin, config, shop & item management, audit
 models/                # SQLAlchemy models (incl. items, inventory, guild_config, ...)
 services/

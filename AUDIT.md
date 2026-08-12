@@ -43,7 +43,7 @@ Total: 32 commands (mix of prefix, slash, and hybrid).
 | passive income | ❌ | ✅ hourly passive income (per-guild toggle) |
 | **Jobs & risk commands** | | |
 | work / crime / rob / beg / search | ✅ | ✅ |
-| hunt / fish / mine / slut | ❌ | ✅ (tool items boost rewards) |
+| hunt / fish / mine | ❌ | ✅ (tool items boost rewards) |
 | **Gambling** | ✅ 12 games | ✅ + per-user locks; animal race / cock fight still missing (see §6) |
 | **Shop & inventory** | ❌ entirely | ✅ shop, buy, sell, use, inventory, giveitem, trade, crates/lootboxes, boosters, limited items |
 | **User systems** | | |
@@ -105,7 +105,7 @@ Total: 32 commands (mix of prefix, slash, and hybrid).
 - `!inventory` / `!inv [user]` (hybrid), `!giveitem <user> <item> [qty]`, `!trade <user> <item> [qty]` (two-sided), `!iteminfo <item>` (hybrid)
 
 ### Activities (`cogs/activities.py`)
-- `!hunt`, `!fish`, `!mine`, `!slut` — risk commands with tool multipliers
+- `!hunt`, `!fish`, `!mine` — risk commands with tool multipliers
 - `!monthly` — 30-day reward
 - `!networth` / `!net` — wallet + bank + inventory
 - `!rep <user>` — reputation (12h cooldown)

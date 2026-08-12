@@ -33,7 +33,12 @@ jobs:
         run: mypy .
 
       - name: Compile check
-        run: python -m compileall -q bot.py config.py cogs models services utils
+        run: python -m compileall -q bot.py config.py cogs models services utils tests
+
+      - name: Event system test
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///ci_events.db
+        run: python tests/test_events.py
 
       - name: Boot smoke test
         env:

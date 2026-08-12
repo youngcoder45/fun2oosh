@@ -190,4 +190,49 @@ All changes are written to the database and recorded in the audit log
 - Boot smoke test — 57 commands registered across 5 cogs
 - Functional test — income CRUD (set/remove/list/upsert), `all_for`
   resolution, per-role cooldown enforcement, combined multi-role payout
-- CI (`ci.yml`) — unchanged job now also covers the new files via ruff/mypy
+- Event tests — `tests/test_events.py` (committed) verifies pool sizes,
+  placeholder rendering, custom currency, DM fallback, missing-pool
+  fallback, and amount formatting; runs in CI
+- CI (`ci.yml`) — ruff/mypy/compile jobs cover all new files; new
+  "Event system test" step runs `tests/test_events.py`
+
+---
+
+## 8. Dynamic Event Messages
+
+Economy activity commands pull their narrative text from JSON pools instead
+of static strings, so results read like a living economy game and admins can
+add events by editing JSON — no code changes.
+
+### Commands converted
+
+| Command | Pool(s) | Events |
+|---|---|---|
+| `!work` / `/work` | `work` | 108 |
+| `!crime` | `crime_success` / `crime_failure` | 105 / 104 |
+| `!search` | `search_success` / `search_failure` | 106 / 106 |
+| `!beg` | `beg_success` / `beg_failure` | 80 / 79 |
+| `!hunt` | `hunt` / `hunt_failure` | 80 / 45 |
+| `!fish` | `fish` / `fish_failure` | 78 / 45 |
+| `!mine` | `mine` / `mine_failure` | 79 / 45 |
+
+Not converted (per spec): gambling, daily/weekly/monthly, collect,
+deposit/withdraw, balance, pay, shop, inventory.
+
+### Engine (`services/events.py`)
+
+- JSON pools live in `data/events/<name>.json` and are lazy-loaded + cached.
+- Placeholders: `{amount}`, `{currency}`, `{user}`, `{guild}` — currency
+  comes from `Config.currency_name`, never hardcoded. Unknown placeholders
+  are left untouched so new ones can be added without breaking pools.
+- `event_message()` formats the amount with thousands separators and fills
+  placeholders; cogs pass a `fallback` so commands still have text if a pool
+  file is missing or unreadable.
+- `utils.helpers.event_names()` resolves `(user, guild)` names, falling back
+  to the user's name in DMs.
+
+### Extensibility
+
+Add a line to a pool JSON and the next command run picks it up (cache is
+per-process; `events.reload()` clears it). Pools support both plain strings
+and objects with a `message` key for future metadata.

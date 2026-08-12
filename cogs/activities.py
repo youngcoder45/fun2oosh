@@ -1,7 +1,7 @@
 """
 Activities & progression cog.
 
-Commands: hunt, fish, mine, slut, monthly, networth, rep, achievements.
+Commands: hunt, fish, mine, monthly, networth, rep, achievements.
 """
 
 import random
@@ -12,13 +12,14 @@ from discord.ext import commands
 
 from bot import Fun2OoshBot
 from services.economy import EconomyService, GuardService
+from services.events import event_message
 from services.guild import GuildConfigService
 from services.items import ItemService
 from services.progression import ACHIEVEMENTS, AchievementService, ProgressionService
 from utils.config import Config
 from utils.cooldowns import check_cooldown
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, EmbedBuilder, event_names, format_coins
 
 # activity: (success_rate, min_reward, max_reward, failure_text, tool_key, cooldown)
 ACTIVITIES = {
@@ -27,15 +28,11 @@ ACTIVITIES = {
     "mine": (0.50, 40, 250, "The tunnel collapsed...", "mine", 60),
 }
 
-SUCCESS_LINES = {
-    "hunt": "You hunted down a wild animal and sold it for {coins}!",
-    "fish": "You caught a big fish and sold it for {coins}!",
-    "mine": "You struck a rich vein and mined {coins} worth of ore!",
+SUCCESS_FALLBACKS = {
+    "hunt": "You hunted down a wild animal and sold it for {amount} {currency}.",
+    "fish": "You caught a big fish and sold it for {amount} {currency}.",
+    "mine": "You struck a rich vein and mined {amount} {currency} worth of ore!",
 }
-
-SLUT_SUCCESS = 0.45
-SLUT_MIN, SLUT_MAX = 100, 500
-SLUT_FINE_MIN, SLUT_FINE_MAX = 50, 150
 
 
 class Activities(commands.Cog):
@@ -58,6 +55,7 @@ class Activities(commands.Cog):
 
     async def _run_activity(self, ctx: commands.Context, key: str) -> None:
         success_rate, r_min, r_max, fail_text, tool, _cd = ACTIVITIES[key]
+        user, guild = event_names(ctx.author, ctx.guild)
         async with self.bot.get_session() as session:
             tool_mult = await ItemService.tool_multiplier(session, ctx.author.id, tool)
             reward = random.randint(r_min, r_max)
@@ -68,12 +66,18 @@ class Activities(commands.Cog):
                 )
                 embed = EmbedBuilder.success_embed(
                     "Success!",
-                    SUCCESS_LINES[key].format(coins=format_coins(final)),
+                    event_message(
+                        key, final, self.config.currency_name, user, guild,
+                        fallback=SUCCESS_FALLBACKS[key],
+                    ),
                 )
             else:
                 embed = discord.Embed(
                     title="No Luck",
-                    description=f"{fail_text} Maybe next time!",
+                    description=event_message(
+                        f"{key}_failure", 0, self.config.currency_name, user, guild,
+                        fallback=fail_text,
+                    ),
                     color=discord.Color.red(),
                 )
 
@@ -104,44 +108,6 @@ class Activities(commands.Cog):
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "mine")
-
-    @commands.command(name="slut", aliases=["hustle"])
-    @check_cooldown("slut", 300)
-    async def slut(self, ctx: commands.Context):
-        """Take a risky hustle. 45% success, earn 100-500, or pay a fine if caught."""
-        if guard := await self._guard_error(ctx):
-            return await ctx.send(guard)
-
-        async with self.bot.get_session() as session:
-            if random.random() < SLUT_SUCCESS:
-                reward = random.randint(SLUT_MIN, SLUT_MAX)
-                final = await EconomyService.reward(
-                    session, ctx.author.id, reward, "slut", "Slut success"
-                )
-                embed = EmbedBuilder.success_embed(
-                    "Success!",
-                    f"You hustled and earned {format_coins(final)}!",
-                )
-            else:
-                fine = random.randint(SLUT_FINE_MIN, SLUT_FINE_MAX)
-                paid = await EconomyService.subtract(
-                    session, ctx.author.id, fine, "slut", "Caught, fine paid"
-                )
-                if paid:
-                    embed = discord.Embed(
-                        title="Caught!",
-                        description=f"You were caught and fined {format_coins(fine)}.",
-                        color=discord.Color.red(),
-                    )
-                else:
-                    embed = discord.Embed(
-                        title="Caught!",
-                        description="You were caught, but you had no coins to pay the fine!",
-                        color=discord.Color.red(),
-                    )
-            new = await AchievementService.check(session, ctx.author.id, "slut")
-        await ctx.send(embed=embed)
-        await self._announce_achievements(ctx, new)
 
     # ---------------------------------------------------------------- monthly
 

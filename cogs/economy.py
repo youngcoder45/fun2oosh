@@ -13,6 +13,7 @@ from bot import Fun2OoshBot
 from models import Transaction, Wallet
 from models.base import utcnow
 from services.economy import EconomyService, GuardService
+from services.events import event_message
 from services.guild import GuildConfigService
 from services.items import ItemService, booster_manager
 from services.locks import lock_manager
@@ -26,6 +27,7 @@ from utils.helpers import (
     COLOR_INFO,
     COLOR_SUCCESS,
     EmbedBuilder,
+    event_names,
     format_coins,
     unix_ts,
 )
@@ -82,8 +84,10 @@ class Economy(commands.Cog):
             new = await AchievementService.check(session, ctx.author.id, "work")
 
         if final > 0:
+            user, guild = event_names(ctx.author, ctx.guild)
             embed = EmbedBuilder.success_embed(
-                "Work Complete!", f"You worked hard and earned {format_coins(final)}!"
+                "Work Complete!",
+                event_message("work", final, self.config.currency_name, user, guild),
             )
             await ctx.send(embed=embed)
         else:
@@ -107,8 +111,10 @@ class Economy(commands.Cog):
             new = await AchievementService.check(session, interaction.user.id, "work")
 
         if final > 0:
+            user, guild = event_names(interaction.user, interaction.guild)
             embed = EmbedBuilder.success_embed(
-                "Work Complete!", f"You worked hard and earned {format_coins(final)}!"
+                "Work Complete!",
+                event_message("work", final, self.config.currency_name, user, guild),
             )
             await interaction.response.send_message(embed=embed)
         else:
@@ -595,17 +601,11 @@ class Economy(commands.Cog):
         """Beg for coins from strangers. 70% success rate, earn 10-100 coins. 1-minute cooldown."""
         import random
 
+        user, guild = event_names(ctx.author, ctx.guild)
+
         # 70% chance to get coins
         if random.random() < 0.7:
             reward = random.randint(10, 100)
-
-            responses = [
-                f"A kind stranger gave you {format_coins(reward)}!",
-                f"Someone felt generous and donated {format_coins(reward)}!",
-                f"You found {format_coins(reward)} someone dropped!",
-                f"A wealthy person tossed you {format_coins(reward)}!",
-                f"You begged successfully and got {format_coins(reward)}!",
-            ]
 
             async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
@@ -613,17 +613,16 @@ class Economy(commands.Cog):
                 )
                 await session.commit()
 
-            embed = EmbedBuilder.success_embed("Success!", random.choice(responses))
+            embed = EmbedBuilder.success_embed(
+                "Success!",
+                event_message("beg_success", reward, self.config.currency_name, user, guild),
+            )
             await ctx.send(embed=embed)
         else:
-            responses = [
-                "Everyone ignored you... ",
-                "People walked past you without looking.",
-                "No one gave you anything today.",
-                "The streets are empty...",
-                "Someone told you to get a job!",
-            ]
-            embed = EmbedBuilder.error_embed("No Luck", random.choice(responses))
+            embed = EmbedBuilder.error_embed(
+                "No Luck",
+                event_message("beg_failure", 0, self.config.currency_name, user, guild),
+            )
             await ctx.send(embed=embed)
 
     @commands.command(name="crime", aliases=["c"])
@@ -631,6 +630,8 @@ class Economy(commands.Cog):
     async def crime(self, ctx: commands.Context):
         """Commit a crime for big rewards! 40% success (300-2k coins), 60% fail (200-600 fine). 5-minute cooldown."""
         import random
+
+        user, guild = event_names(ctx.author, ctx.guild)
 
         # 40% success rate
         success = random.random() < 0.4
@@ -660,7 +661,8 @@ class Economy(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.success_embed(
-                "Crime Success!", f"You {crime_desc} and got away with {format_coins(reward)}!"
+                "Crime Success!",
+                event_message("crime_success", reward, self.config.currency_name, user, guild),
             )
             await ctx.send(embed=embed)
         else:
@@ -671,14 +673,13 @@ class Economy(commands.Cog):
                 if wallet.balance >= fine:
                     wallet.balance -= fine
                     await session.commit()
-                    loss_msg = f"You were caught and fined {format_coins(fine)}!"
+                    loss_msg = event_message(
+                        "crime_failure", fine, self.config.currency_name, user, guild
+                    )
                 else:
                     loss_msg = "You were caught but had no money to pay the fine!"
 
-            embed = EmbedBuilder.error_embed(
-                "Caught!",
-                f"You tried to {crime_desc} but got caught!\n{loss_msg}",
-            )
+            embed = EmbedBuilder.error_embed("Caught!", loss_msg)
             await ctx.send(embed=embed)
 
         async with self.bot.get_session() as session:
@@ -941,6 +942,7 @@ class Economy(commands.Cog):
             ("beach sand", 40, 120),
         ]
 
+        user, guild = event_names(ctx.author, ctx.guild)
         location, min_reward, max_reward = random.choice(locations)
 
         # 80% chance to find something
@@ -954,12 +956,13 @@ class Economy(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.success_embed(
-                "Found!", f"You searched the **{location}** and found {format_coins(reward)}!"
+                "Found!",
+                event_message("search_success", reward, self.config.currency_name, user, guild),
             )
         else:
             embed = EmbedBuilder.warning_embed(
                 "Nothing Found",
-                f"You searched the **{location}** but found nothing...",
+                event_message("search_failure", 0, self.config.currency_name, user, guild),
             )
 
         async with self.bot.get_session() as session:

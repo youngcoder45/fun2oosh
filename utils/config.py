@@ -29,6 +29,9 @@ class Config(BaseSettings):
     owner_id: Optional[int] = Field(default=None)
     command_prefix: str = Field(default='!')
 
+    # Currency name used by dynamic event messages (no hardcoded symbols)
+    currency_name: str = Field(default='coins')
+
     # Economy/Game settings
     min_bet: int = Field(default=10)
     max_bet: int = Field(default=10000)
