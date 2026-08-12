@@ -538,7 +538,7 @@ class Admin(commands.Cog):
                 f"every {format_duration(row.claim_interval or 3600)}"
             )
         embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
-        embed.set_footer(text="!collect pays your highest eligible income role")
+        embed.set_footer(text="!collect pays every income role you hold")
         await ctx.send(embed=embed)
 
     # -------------------------------------------------- role income (slash)
@@ -675,7 +675,7 @@ class Admin(commands.Cog):
                 f"every {format_duration(row.claim_interval or 3600)}"
             )
         embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
-        embed.set_footer(text="!collect pays your highest eligible income role")
+        embed.set_footer(text="!collect pays every income role you hold")
         await interaction.response.send_message(embed=embed)
 
 

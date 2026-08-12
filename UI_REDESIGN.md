@@ -65,7 +65,7 @@ footers (e.g. `!econfig set <key> <value>`).
 | `Item ID: … Buy with: !buy …` | Contextual hint for the command |
 | `Offer expires in 60 seconds` | Trade deadline context |
 | `!econfig set <key> <value>` | Contextual hint |
-| `!collect pays your highest eligible income role` | Contextual hint |
+| `!collect pays every income role you hold` | Contextual hint |
 | `responsible_gaming_notice()` | Responsible-gambling notice on casino results |
 
 Removed: decorative `Economy • User ID: …`, `Casino • Blackjack Table`-style
@@ -91,37 +91,35 @@ via the `/role-income` slash group (or `!income` prefix group):
 
 When a user runs `collect`:
 
-1. `RoleIncomeService.highest_for(guild, user_role_ids)` finds the highest-
-   paying income role the user holds. No role → clear "ask an admin" message;
+1. `RoleIncomeService.all_for(guild, user_role_ids)` finds **every** income
+   role the user holds. No roles → clear "ask an admin" message;
    **no flat fallback payout** (the old `collect_reward` setting was removed).
-2. The **role's own claim interval** is checked against the user's last claim
-   for that role, persisted in the new `role_claims` table — windows survive
-   bot restarts (in-memory cooldowns would reset them).
-3. If the window has passed, the configured amount is paid and the claim is
-   recorded. Otherwise the user gets a Discord **relative timestamp** telling
-   them exactly when they can claim again.
+2. Each role's **own claim interval** is checked against the user's last claim
+   for that role, persisted in the `role_claims` table — windows survive bot
+   restarts (in-memory cooldowns would reset them).
+3. Every role whose window has passed is paid on its own timer; a user holding
+   several roles collects the **combined** total. Roles still cooling down
+   simply wait for their own next window.
+4. If every role is cooling down, the user gets a Discord **relative timestamp**
+   for the earliest claim.
 
-**Payout rule chosen: highest eligible role.** Rationale:
-
-- **Predictable economy.** Combined payouts stack multiplicatively with role
-  count and silently double economies as servers add roles. Highest-amount
-  keeps the payout ceiling visible and auditable.
-- **Matches role-tier mental models.** Servers model VIP > Premium > Member;
-  "highest eligible" matches the hierarchy admins intend.
-- **Simpler to balance.** One number per role, one winner per collect.
-- **No exploit surface.** Combined payouts reward stacking throwaway roles;
-  highest-amount rewards progression into a single better role.
+**Payout rule: every eligible role (stacking).** The user asked for multiple
+role rewards to stack rather than pay only the highest. Each role keeps its
+configured interval (VIP every 2h, Member every hour — holding both pays both).
 
 ### Collect embed (minimal — an admin-granted claim, not a job)
 ```
 Role Income Claim           [success green]
-  Income Source : VIP                Amount Earned : 750 coins
-  Balance       : 12,480 coins
-  Next Claim    : <t:1730000000:R>   → renders "in 2 hours"
+  Income Sources:                       Total Earned: 950 coins
+    VIP — +750 coins
+    Member — +200 coins
+  Balance  : 12,480 coins
+  Next Claim: <t:1730000000:R>   → renders "in 1 hour"
 ```
-Exactly four fields: source role, amount earned (as configured by the admin),
-updated balance, and next claim as a Discord relative timestamp. No footer,
-no decorative emoji, no description — a role perk, not another `work`.
+Single-role claims render as a simple `Income Source` field. Multi-role claims
+show a per-role breakdown and total. Next claim is the soonest role window as
+a Discord relative timestamp. No footer, no decorative emoji — a role perk,
+not another `work`.
 
 ### Database changes
 
@@ -190,6 +188,6 @@ All changes are written to the database and recorded in the audit log
 - `mypy .` — clean (35 files)
 - `py_compile` all modules — clean
 - Boot smoke test — 57 commands registered across 5 cogs
-- Functional test — income CRUD (set/remove/list/upsert), `highest_for`
-  resolution, cooldown enforcement, empty-role fallback
+- Functional test — income CRUD (set/remove/list/upsert), `all_for`
+  resolution, per-role cooldown enforcement, combined multi-role payout
 - CI (`ci.yml`) — unchanged job now also covers the new files via ruff/mypy

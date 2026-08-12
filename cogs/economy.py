@@ -2,8 +2,7 @@
 Economy cog for wallet management and basic income commands.
 """
 
-from datetime import timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import discord
 from discord import app_commands
@@ -120,49 +119,30 @@ class Economy(commands.Cog):
 
     @commands.command(name="collect", aliases=["claim"])
     async def collect(self, ctx: commands.Context):
-        """Claim your role income. Pays your highest income role's configured amount."""
+        """Claim your role income. Collects every eligible income role's payout."""
         if ctx.guild is None:
             return await ctx.send("Collect only works in servers.")
         async with self.bot.get_session() as session:
-            outcome = await self._collect_payout(session, ctx.author)
-        if outcome is None:
+            payouts = await self._collect_payout(session, ctx.author)
+        if not payouts:
             return await ctx.send(
                 "No income role is configured for you in this server. "
                 "An admin can set one up with `/role-income`."
             )
-        amount, source, role_id, interval = outcome
 
-        # Check + payout + claim record all under the per-user lock so
+        # Check + payout + claim records all under the per-user lock so
         # concurrent collects cannot double-claim.
         async with lock_manager.for_user(ctx.author.id):
             async with self.bot.get_session() as session:
-                claim = await RoleIncomeService.last_claim(
-                    session, ctx.guild.id, ctx.author.id, role_id
+                earned, breakdown, next_ts, balance = await self._resolve_collect(
+                    session, ctx.author.id, ctx.guild.id, payouts
                 )
-                wait = RoleIncomeService.seconds_until_next_claim(claim, interval)
-                if wait > 0:
-                    next_ts = unix_ts(utcnow()) + wait
-                    return await ctx.send(
-                        f"You can claim **{source}** income again <t:{next_ts}:R>."
-                    )
-                final = int(amount * booster_manager.get_multiplier(ctx.author.id))
-                wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
-                wallet.balance += final
-                session.add(
-                    Transaction(
-                        user_id=ctx.author.id,
-                        type="collect",
-                        amount=final,
-                        description=f"Role income: {source}",
-                    )
-                )
-                await RoleIncomeService.record_claim(
-                    session, ctx.guild.id, ctx.author.id, role_id
-                )
-                await session.commit()
-
-        next_at = utcnow() + timedelta(seconds=interval)
-        embed = self._collect_embed(source, final, wallet.balance or 0, next_at)
+        if earned <= 0:
+            return await ctx.send(
+                f"All your income roles are on cooldown. "
+                f"Earliest claim available <t:{next_ts}:R>."
+            )
+        embed = self._collect_embed(breakdown, earned, balance, next_ts)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="collect", description="Claim your role income")
@@ -173,51 +153,28 @@ class Economy(commands.Cog):
                 "Collect only works in servers.", ephemeral=True
             )
         async with self.bot.get_session() as session:
-            outcome = await self._collect_payout(session, interaction.user)
-        if outcome is None:
+            payouts = await self._collect_payout(session, interaction.user)
+        if not payouts:
             return await interaction.response.send_message(
                 "No income role is configured for you in this server. "
                 "An admin can set one up with `/role-income`.",
                 ephemeral=True,
             )
-        amount, source, role_id, interval = outcome
 
-        # Check + payout + claim record all under the per-user lock so
+        # Check + payout + claim records all under the per-user lock so
         # concurrent collects cannot double-claim.
         async with lock_manager.for_user(interaction.user.id):
             async with self.bot.get_session() as session:
-                claim = await RoleIncomeService.last_claim(
-                    session, interaction.guild.id, interaction.user.id, role_id
+                earned, breakdown, next_ts, balance = await self._resolve_collect(
+                    session, interaction.user.id, interaction.guild.id, payouts
                 )
-                wait = RoleIncomeService.seconds_until_next_claim(claim, interval)
-                if wait > 0:
-                    next_ts = unix_ts(utcnow()) + wait
-                    return await interaction.response.send_message(
-                        f"You can claim **{source}** income again <t:{next_ts}:R>.",
-                        ephemeral=True,
-                    )
-                final = int(
-                    amount * booster_manager.get_multiplier(interaction.user.id)
-                )
-                wallet = await EconomyUtils.get_or_create_wallet(
-                    session, interaction.user.id
-                )
-                wallet.balance += final
-                session.add(
-                    Transaction(
-                        user_id=interaction.user.id,
-                        type="collect",
-                        amount=final,
-                        description=f"Role income: {source}",
-                    )
-                )
-                await RoleIncomeService.record_claim(
-                    session, interaction.guild.id, interaction.user.id, role_id
-                )
-                await session.commit()
-
-        next_at = utcnow() + timedelta(seconds=interval)
-        embed = self._collect_embed(source, final, wallet.balance or 0, next_at)
+        if earned <= 0:
+            return await interaction.response.send_message(
+                f"All your income roles are on cooldown. "
+                f"Earliest claim available <t:{next_ts}:R>.",
+                ephemeral=True,
+            )
+        embed = self._collect_embed(breakdown, earned, balance, next_ts)
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="daily", aliases=["d"])
@@ -1148,35 +1105,90 @@ class Economy(commands.Cog):
             except Exception:
                 await ctx.response.send_message(embed=embed)
 
-    async def _collect_payout(self, session, user):
-        """Resolve the collect payout: highest eligible income role.
+    async def _resolve_collect(
+        self, session, user_id: int, guild_id: int, payouts
+    ) -> Tuple[int, List[Tuple[str, int]], int, int]:
+        """Claim every ready income role, atomically, under the caller's lock.
 
-        Returns ``(amount, source_label, role_id, claim_interval)`` or ``None``
-        when the user holds no configured income role.
+        Returns ``(earned, breakdown, next_ts, balance)``. ``earned`` is 0 when
+        every role is on cooldown; ``next_ts`` is the epoch of the earliest
+        role that will become claimable again.
+        """
+        earned = 0
+        breakdown: List[Tuple[str, int]] = []
+        ready = []
+        next_waits = []
+        for amount, source, role_id, interval in payouts:
+            claim = await RoleIncomeService.last_claim(session, guild_id, user_id, role_id)
+            wait = RoleIncomeService.seconds_until_next_claim(claim, interval)
+            if wait > 0:
+                next_waits.append(wait)
+                continue
+            ready.append((amount, source, role_id, interval))
+            next_waits.append(interval)
+
+        if not ready:
+            # Nothing claimed — report the earliest window without touching the wallet.
+            return 0, [], unix_ts(utcnow()) + min(next_waits), 0
+
+        wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
+        for amount, source, role_id, interval in ready:
+            final = int(amount * booster_manager.get_multiplier(user_id))
+            earned += final
+            breakdown.append((source, final))
+            wallet.balance += final
+            session.add(
+                Transaction(
+                    user_id=user_id,
+                    type="collect",
+                    amount=final,
+                    description=f"Role income: {source}",
+                )
+            )
+            await RoleIncomeService.record_claim(session, guild_id, user_id, role_id)
+        await session.commit()
+        return earned, breakdown, unix_ts(utcnow()) + min(next_waits), wallet.balance or 0
+
+    async def _collect_payout(self, session, user):
+        """Resolve the collect payout: every eligible income role the user holds.
+
+        Returns a list of ``(amount, source_label, role_id, claim_interval)``
+        tuples, empty when the user holds no configured income role.
         """
         guild = getattr(user, "guild", None)
         if guild is None:
-            return None
+            return []
         role_ids = [role.id for role in getattr(user, "roles", [])]
-        income = await RoleIncomeService.highest_for(session, guild.id, role_ids)
-        if income is None or income.amount <= 0:
-            return None
-        role = guild.get_role(income.role_id)
-        source = role.name if role is not None else f"Role {income.role_id}"
-        return income.amount, source, income.role_id, income.claim_interval or 3600
+        incomes = await RoleIncomeService.all_for(session, guild.id, role_ids)
+        payouts = []
+        for income in incomes:
+            if income.amount <= 0:
+                continue
+            role = guild.get_role(income.role_id)
+            source = role.name if role is not None else f"Role {income.role_id}"
+            payouts.append(
+                (income.amount, source, income.role_id, income.claim_interval or 3600)
+            )
+        return payouts
 
     @staticmethod
-    def _collect_embed(source: str, amount: int, balance: int, next_at) -> discord.Embed:
-        """Minimal role-income embed: source role, amount, balance, next claim."""
+    def _collect_embed(
+        breakdown: List[Tuple[str, int]], amount: int, balance: int, next_ts: int
+    ) -> discord.Embed:
+        """Role-income embed: per-role breakdown, total earned, balance, next claim."""
         embed = discord.Embed(title="Role Income Claim", color=COLOR_SUCCESS)
-        embed.add_field(name="Income Source", value=source, inline=True)
-        embed.add_field(name="Amount Earned", value=f"**{amount:,}** coins", inline=True)
+        if len(breakdown) == 1:
+            source, earned = breakdown[0]
+            embed.add_field(name="Income Source", value=source, inline=True)
+            embed.add_field(name="Amount Earned", value=f"**{earned:,}** coins", inline=True)
+        else:
+            lines = "\n".join(
+                f"**{source}** — +{earned:,} coins" for source, earned in breakdown
+            )
+            embed.add_field(name="Income Sources", value=lines, inline=False)
+            embed.add_field(name="Total Earned", value=f"**{amount:,}** coins", inline=False)
         embed.add_field(name="Balance", value=f"**{balance:,}** coins", inline=True)
-        embed.add_field(
-            name="Next Claim",
-            value=f"<t:{unix_ts(next_at)}:R>",
-            inline=False,
-        )
+        embed.add_field(name="Next Claim", value=f"<t:{next_ts}:R>", inline=False)
         return embed
 
     async def _guard_error(self, ctx, session) -> Optional[str]:

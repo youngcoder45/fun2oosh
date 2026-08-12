@@ -2,8 +2,9 @@
 Per-guild role income configuration.
 
 Administrators assign a coin amount and a claim interval to roles; `!collect`
-pays the highest eligible role's configured amount once per interval (e.g.
-every 2 hours). No values are hardcoded, everything lives in the database
+pays **every** eligible role's configured amount, each on its own interval
+(e.g. VIP pays 750 every 2 hours, Member pays 200 every hour — a user holding
+both earns both). No values are hardcoded, everything lives in the database
 and survives restarts.
 
 The interval is a property of the role, not of the bot: one role can pay

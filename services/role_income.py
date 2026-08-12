@@ -2,19 +2,15 @@
 Role-income service — per-guild income tiers with per-role claim windows,
 used by `!collect`.
 
-Design choice: when a user holds several income roles, `!collect` pays the
-**highest** eligible amount rather than the combined total. Reasons:
+Design choice: a user holding several income roles collects **every**
+eligible role's payout, not just the highest one. Rewards stack, so admins
+can grant Member + VIP + Booster income and the user earns all three. Each
+role runs on its own claim interval (e.g. VIP every 2 hours, Member every
+hour), so a user can collect whenever any of their roles is ready.
 
-- Predictable and easy for administrators to reason about (clean tiers:
-  Member < VIP < Premium < Booster).
-- No exploit incentive to stack many low roles.
-- Balances naturally: a server's total payout per user is bounded by its
-  most generous role, so admins can price tiers without worrying about
-  combos.
-
-Each role also carries its own claim interval (e.g. 2 hours). Claim timing
-is persisted in `role_claims` so windows survive restarts and render as
-Discord relative timestamps (`<t:...:R>`).
+Claim timing is persisted per (guild, user, role) in `role_claims`, so
+windows survive restarts and render as Discord relative timestamps
+(`<t:...:R>`).
 """
 
 from datetime import datetime
@@ -92,20 +88,21 @@ class RoleIncomeService:
         )
 
     @staticmethod
-    async def highest_for(
+    async def all_for(
         session: AsyncSession, guild_id: int, role_ids: List[int]
-    ) -> Optional[RoleIncome]:
-        """The income row for the highest-paying role the user holds."""
+    ) -> List[RoleIncome]:
+        """Every income row for the roles the user holds, highest amount first."""
         if not role_ids:
-            return None
-        return (
-            await session.execute(
-                select(RoleIncome)
-                .where(RoleIncome.guild_id == guild_id, RoleIncome.role_id.in_(role_ids))
-                .order_by(RoleIncome.amount.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+            return []
+        return list(
+            (
+                await session.execute(
+                    select(RoleIncome)
+                    .where(RoleIncome.guild_id == guild_id, RoleIncome.role_id.in_(role_ids))
+                    .order_by(RoleIncome.amount.desc())
+                )
+            ).scalars()
+        )
 
     # --------------------------------------------------------------- claims
 
