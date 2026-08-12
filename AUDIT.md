@@ -137,6 +137,7 @@ Total: **56 commands** across 5 cogs.
 | 6 | `metadata` column name reserved by SQLAlchemy | Medium | Renamed to `extra_data` |
 | 7 | Trade-offer cleanup mutated list during iteration | Low | Rebuild list |
 | 8 | No input validation on admin `econfig` values | Medium | Typed + range-validated settings |
+| 9 | `!weekly` cooldown was in-memory (reset on restart) | Medium | DB-backed `last_weekly_at` + auto-migration (like daily/monthly) |
 
 ### Residual risks (documented)
 - Boosters are in-memory → reset on bot restart (acceptable v1).

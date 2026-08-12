@@ -4,7 +4,11 @@ A standalone Discord economy & casino bot with wallets, banks, rewards, streaks,
 achievements, prestige, a full item shop & inventory, trading, gambling games,
 transfers, leaderboards, and anti-abuse protection.
 
-See `AUDIT.md` for the full feature-parity audit, database changes, and security review.
+Documentation:
+
+- `AUDIT.md` — feature-parity audit, database changes, and security review
+- `UI_REDESIGN.md` — UI/UX design system, role-income collect, event messages, cooldown timestamps
+- `CONTRIBUTING.md` — how to set up a dev environment and contribute
 
 ## Features
 
@@ -87,6 +91,8 @@ All settings live in `utils/config.py` and can be overridden via `.env`:
 | `WORK_REWARD`       | `100`                      | Reward for `!work`                 |
 | `DAILY_REWARD`      | `500`                      | Reward for `!daily`                |
 | `WEEKLY_REWARD`     | `2000`                     | Reward for `!weekly`               |
+| `MONTHLY_REWARD`    | `5000`                     | Reward for `!monthly`              |
+| `CURRENCY_NAME`     | `💎`                        | Currency name used in event text   |
 
 ## Project structure
 
@@ -136,3 +142,7 @@ register.
 
 This bot includes gambling mechanics. Please gamble responsibly — set limits,
 take breaks, and never bet money you can't afford to lose. **18+ only.**
+
+## License
+
+Released under the [MIT License](LICENSE).

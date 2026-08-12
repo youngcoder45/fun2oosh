@@ -40,6 +40,3 @@ class Config(BaseSettings):
     daily_reward: int = Field(default=500)
     weekly_reward: int = Field(default=2000)
     monthly_reward: int = Field(default=5000)
-    work_cooldown: int = Field(default=1800)
-    daily_cooldown: int = Field(default=86400)
-    weekly_cooldown: int = Field(default=604800)
