@@ -74,15 +74,12 @@ class Activities(commands.Cog):
                 final = await EconomyService.reward(
                     session, ctx.author.id, int(reward * tool_mult), key, f"{key.title()} reward"
                 )
-                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
                 embed = EmbedBuilder.activity_embed(
                     header,
                     event_message(
                         key, final, self.config.currency_name, user, guild,
                         fallback=SUCCESS_FALLBACKS[key],
                     ),
-                    balance=wallet.balance if wallet is not None else None,
-                    currency=self.config.currency_name,
                 )
             else:
                 embed = EmbedBuilder.activity_embed(

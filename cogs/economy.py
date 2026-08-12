@@ -84,19 +84,12 @@ class Economy(commands.Cog):
                 session, ctx.author.id, reward, "work", "Daily work reward"
             )
             new = await AchievementService.check(session, ctx.author.id, "work")
-            if final > 0:
-                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
-                balance = wallet.balance if wallet is not None else None
-            else:
-                balance = None
 
         if final > 0:
             user, guild = event_names(ctx.author, ctx.guild)
             embed = EmbedBuilder.activity_embed(
                 "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
-                balance=balance,
-                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
@@ -118,19 +111,12 @@ class Economy(commands.Cog):
                 session, interaction.user.id, reward, "work", "Daily work reward"
             )
             new = await AchievementService.check(session, interaction.user.id, "work")
-            if final > 0:
-                wallet = await EconomyUtils.get_wallet(session, interaction.user.id)
-                balance = wallet.balance if wallet is not None else None
-            else:
-                balance = None
 
         if final > 0:
             user, guild = event_names(interaction.user, interaction.guild)
             embed = EmbedBuilder.activity_embed(
                 "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
-                balance=balance,
-                currency=self.config.currency_name,
             )
             await interaction.response.send_message(embed=embed)
         else:
@@ -156,7 +142,7 @@ class Economy(commands.Cog):
         # concurrent collects cannot double-claim.
         async with lock_manager.for_user(ctx.author.id):
             async with self.bot.get_session() as session:
-                earned, breakdown, next_ts, balance = await self._resolve_collect(
+                earned, breakdown, next_ts = await self._resolve_collect(
                     session, ctx.author.id, ctx.guild.id, payouts
                 )
         if earned <= 0:
@@ -165,7 +151,7 @@ class Economy(commands.Cog):
                 f"Try again <t:{next_ts}:R>\n"
                 f"Available at <t:{next_ts}:F>"
             )
-        embed = self._collect_embed(breakdown, earned, balance, next_ts)
+        embed = self._collect_embed(breakdown, earned, next_ts)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="collect", description="Claim your role income")
@@ -188,7 +174,7 @@ class Economy(commands.Cog):
         # concurrent collects cannot double-claim.
         async with lock_manager.for_user(interaction.user.id):
             async with self.bot.get_session() as session:
-                earned, breakdown, next_ts, balance = await self._resolve_collect(
+                earned, breakdown, next_ts = await self._resolve_collect(
                     session, interaction.user.id, interaction.guild.id, payouts
                 )
         if earned <= 0:
@@ -198,7 +184,7 @@ class Economy(commands.Cog):
                 f"Available at <t:{next_ts}:F>",
                 ephemeral=True,
             )
-        embed = self._collect_embed(breakdown, earned, balance, next_ts)
+        embed = self._collect_embed(breakdown, earned, next_ts)
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="daily", aliases=["d"])
@@ -630,13 +616,10 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "beg", "Begging reward"
                 )
                 await session.commit()
-                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
             embed = EmbedBuilder.activity_embed(
                 "begged",
                 event_message("beg_success", reward, self.config.currency_name, user, guild),
-                balance=wallet.balance if wallet is not None else None,
-                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
@@ -681,13 +664,10 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "crime", f"Crime: {crime_desc}"
                 )
                 await session.commit()
-                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
             embed = EmbedBuilder.activity_embed(
                 "crime",
                 event_message("crime_success", reward, self.config.currency_name, user, guild),
-                balance=wallet.balance if wallet is not None else None,
-                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
@@ -708,8 +688,6 @@ class Economy(commands.Cog):
                 "crime",
                 loss_msg,
                 color=COLOR_ERROR,
-                balance=wallet.balance or 0,
-                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
 
@@ -777,8 +755,6 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.activity_embed(
                     "robbed",
                     f"You robbed {format_coins(rob_amount)} from {user.mention}!",
-                    balance=robber_wallet.balance or 0,
-                    currency=self.config.currency_name,
                 )
                 await ctx.send(embed=embed)
             else:
@@ -803,8 +779,6 @@ class Economy(commands.Cog):
                     f"You were caught trying to rob {user.mention}!\n"
                     f"You lost {format_coins(fine)} and they got {format_coins(fine // 2)}!",
                     color=COLOR_ERROR,
-                    balance=robber_wallet.balance or 0,
-                    currency=self.config.currency_name,
                 )
                 await ctx.send(embed=embed)
 
@@ -990,13 +964,10 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "search", f"Searched {location}"
                 )
                 await session.commit()
-                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
             embed = EmbedBuilder.activity_embed(
                 "search",
                 event_message("search_success", reward, self.config.currency_name, user, guild),
-                balance=wallet.balance if wallet is not None else None,
-                currency=self.config.currency_name,
             )
         else:
             embed = EmbedBuilder.activity_embed(
@@ -1150,10 +1121,10 @@ class Economy(commands.Cog):
 
     async def _resolve_collect(
         self, session, user_id: int, guild_id: int, payouts
-    ) -> Tuple[int, List[Tuple[str, int]], int, int]:
+    ) -> Tuple[int, List[Tuple[str, int]], int]:
         """Claim every ready income role, atomically, under the caller's lock.
 
-        Returns ``(earned, breakdown, next_ts, balance)``. ``earned`` is 0 when
+        Returns ``(earned, breakdown, next_ts)``. ``earned`` is 0 when
         every role is on cooldown; ``next_ts`` is the epoch of the earliest
         role that will become claimable again.
         """
@@ -1172,7 +1143,7 @@ class Economy(commands.Cog):
 
         if not ready:
             # Nothing claimed — report the earliest window without touching the wallet.
-            return 0, [], unix_ts(utcnow()) + min(next_waits), 0
+            return 0, [], unix_ts(utcnow()) + min(next_waits)
 
         wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
         for amount, source, role_id, interval in ready:
@@ -1190,7 +1161,7 @@ class Economy(commands.Cog):
             )
             await RoleIncomeService.record_claim(session, guild_id, user_id, role_id)
         await session.commit()
-        return earned, breakdown, unix_ts(utcnow()) + min(next_waits), wallet.balance or 0
+        return earned, breakdown, unix_ts(utcnow()) + min(next_waits)
 
     async def _collect_payout(self, session, user):
         """Resolve the collect payout: every eligible income role the user holds.
@@ -1216,9 +1187,9 @@ class Economy(commands.Cog):
 
     @staticmethod
     def _collect_embed(
-        breakdown: List[Tuple[str, int]], amount: int, balance: int, next_ts: int
+        breakdown: List[Tuple[str, int]], amount: int, next_ts: int
     ) -> discord.Embed:
-        """Role-income embed: per-role breakdown, total earned, balance, next claim."""
+        """Role-income embed: per-role breakdown, total earned, next claim."""
         embed = discord.Embed(title="Role Income Claim", color=COLOR_SUCCESS)
         if len(breakdown) == 1:
             source, earned = breakdown[0]
@@ -1230,7 +1201,6 @@ class Economy(commands.Cog):
             )
             embed.add_field(name="Income Sources", value=lines, inline=False)
             embed.add_field(name="Total Earned", value=f"**{amount:,}** coins", inline=False)
-        embed.add_field(name="Balance", value=f"**{balance:,}** coins", inline=True)
         embed.add_field(name="Next Claim", value=f"<t:{next_ts}:R>", inline=False)
         return embed
 

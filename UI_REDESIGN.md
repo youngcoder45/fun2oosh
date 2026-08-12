@@ -113,7 +113,6 @@ Role Income Claim           [success green]
   Income Sources:                       Total Earned: 950 coins
     VIP — +750 coins
     Member — +200 coins
-  Balance  : 12,480 coins
   Next Claim: <t:1730000000:R>   → renders "in 1 hour"
 ```
 Single-role claims render as a simple `Income Source` field. Multi-role claims
@@ -286,15 +285,11 @@ cooldown countdown.
 ## 10. UnbelievaBoat-Style Activity Headers
 
 Activity commands render the command as a small lowercase **author header**
-instead of an embed title, with the event narrative as the description and
-an optional trailing balance field:
+instead of an embed title, with the event narrative as the description:
 
 ```
 worked
 You repaired three motorcycles and earned 142 coins.
-
-New Balance
-12,450 coins
 ```
 
 ### Layout
@@ -302,7 +297,8 @@ New Balance
 - `embed.set_author(name=...)` — lowercase activity label, no title, no
   footer.
 - Description — the generated event text (primary focus).
-- Optional `New Balance` field (uses `Config.currency_name`).
+- No balance field — activity embeds stay narrative-only (check `!balance`
+  for your wallet).
 
 ### Headers
 
@@ -319,9 +315,9 @@ New Balance
 
 ### Implementation
 
-- `EmbedBuilder.activity_embed(header, description, *, color, balance,
-  currency)` — the single builder behind all activity embeds.
-- Balance is read from the wallet in the command's existing session (success
-  paths and the failure paths that already touch the wallet — crime, rob).
-- Daily/weekly/monthly/collect/casino embeds are unchanged (not activity
-  commands).
+- `EmbedBuilder.activity_embed(header, description, *, color)` — the single
+  builder behind all activity embeds.
+- `!collect` also dropped its Balance field — the claim embed shows the
+  breakdown, total earned, and next claim only.
+- Casino result embeds (e.g. coinflip) keep a New Balance field — gambling
+  results, not activity commands.
