@@ -17,6 +17,7 @@ import logging
 import sys
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -121,6 +122,45 @@ class Fun2OoshBot(commands.Bot):
 
         logger.error("Unhandled error in command '%s': %s", ctx.command, error, exc_info=error)
         await ctx.send(f"❌ An unexpected error occurred: {error}")
+
+    async def on_application_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        """Friendly error messages for slash/hybrid commands."""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"⏰ Command on cooldown. Try again in {error.retry_after:.0f}s.",
+                ephemeral=True,
+            )
+            return
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                f"❌ You need the `{', '.join(error.missing_permissions)}` permission to do that.",
+                ephemeral=True,
+            )
+            return
+        if isinstance(error, app_commands.CheckFailure):
+            await interaction.response.send_message(
+                "❌ You don't have permission to use this command.",
+                ephemeral=True,
+            )
+            return
+
+        # Unwrap command-invoke errors to reach the real exception
+        if isinstance(error, app_commands.CommandInvokeError) and error.original:
+            error = error.original
+
+        logger.error(
+            "Unhandled error in app command '%s': %s", interaction.command, error, exc_info=error
+        )
+        try:
+            await interaction.response.send_message(
+                f"❌ An unexpected error occurred: {error}", ephemeral=True
+            )
+        except discord.HTTPException:
+            pass
 
     async def close(self) -> None:
         """Dispose the database engine on shutdown."""

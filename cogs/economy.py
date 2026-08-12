@@ -855,6 +855,7 @@ class Economy(commands.Cog):
             )
             earn_result = await session.execute(earn_stmt)
             total_earned = earn_result.scalar() or 0
+            await session.commit()  # Persist wallet if it was just created
         
         total_wealth = wallet.balance + wallet.bank
         
