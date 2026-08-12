@@ -1,0 +1,6 @@
+discord.py>=2.3
+SQLAlchemy>=2.0
+aiosqlite>=0.20
+pydantic>=2.5
+pydantic-settings>=2.0
+python-dotenv>=1.0

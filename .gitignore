@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Env & secrets
+.env
+
+# Databases (keep fun2oosh.db tracked if you want it committed)
+# *.db
