@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 
 import discord
 
-COIN_EMOJI = "🪙"
+COIN_EMOJI = "💎️"
 
 
 def format_coins(amount) -> str:
@@ -51,20 +51,24 @@ class EmbedBuilder:
         """Wallet overview embed for a user."""
         total = balance + bank
         embed = discord.Embed(
-            title=f"💼 {getattr(user, 'display_name', str(user))}'s Wallet",
+            title=f"{getattr(user, 'display_name', str(user))}'s Wallet",
             color=discord.Color.blurple(),
         )
-        embed.set_thumbnail(url=getattr(user, 'display_avatar', None) and user.display_avatar.url)
-        embed.add_field(name="💵 Wallet", value=f"```\n{balance:,} coins\n```", inline=True)
-        embed.add_field(name="🏦 Bank", value=f"```\n{bank:,} coins\n```", inline=True)
-        embed.add_field(name="💰 Total", value=f"```\n{total:,} coins\n```", inline=False)
+        embed.set_thumbnail(
+            url=getattr(user, "display_avatar", None) and user.display_avatar.url
+        )
+        embed.add_field(
+            name="Wallet", value=f"```\n{balance:,} coins\n```", inline=True
+        )
+        embed.add_field(name="Bank", value=f"```\n{bank:,} coins\n```", inline=True)
+        embed.add_field(name="Total", value=f"```\n{total:,} coins\n```", inline=False)
         embed.set_footer(text="Economy • Keep your money safe in the bank!")
         return embed
 
     @staticmethod
     def leaderboard_embed(
         leaderboard: List[Tuple[int, int]],
-        title: str = "🏆 Leaderboard",
+        title: str = "Leaderboard",
         bot: Optional[object] = None,
     ) -> discord.Embed:
         """Leaderboard embed from a list of (user_id, total) tuples."""

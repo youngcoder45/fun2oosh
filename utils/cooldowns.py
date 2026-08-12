@@ -65,6 +65,7 @@ def check_cooldown(key: str, seconds: int):
         async def work(self, ctx: commands.Context):
             ...
     """
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(self, ctx, *args, **kwargs):
@@ -72,11 +73,13 @@ def check_cooldown(key: str, seconds: int):
             if cooldown_manager.is_on_cooldown(key, user_id, seconds):
                 remaining = cooldown_manager.get_remaining_time(key, user_id, seconds)
                 await ctx.send(
-                    f"⏰ Please wait **{remaining:.0f} seconds** before using "
+                    f"Please wait **{remaining:.0f} seconds** before using "
                     f"`{key}` again."
                 )
                 return
             cooldown_manager.set_cooldown(key, user_id)
             return await func(self, ctx, *args, **kwargs)
+
         return wrapper
+
     return decorator

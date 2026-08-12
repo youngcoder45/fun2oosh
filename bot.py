@@ -13,16 +13,23 @@ The database is created automatically on first startup
 (default: sqlite+aiosqlite:///fun2oosh.db).
 """
 
+import asyncio
+import contextlib
 import logging
 import sys
+from datetime import datetime
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from models import Base
+from models import Base, Transaction, Wallet
+from services.guild import GuildConfigService
+from services.items import ItemService
 from utils.config import Config
+from utils.migrations import run_migrations
 
 logger = logging.getLogger("fun2oosh")
 
@@ -30,6 +37,8 @@ CORE_COGS = (
     "cogs.economy",
     "cogs.casino",
     "cogs.admin_economy",
+    "cogs.shop",
+    "cogs.activities",
 )
 
 
@@ -65,15 +74,26 @@ class Fun2OoshBot(commands.Bot):
         return self.session_factory()
 
     async def setup_hook(self) -> None:
-        """Create database tables and load all cogs."""
+        """Create tables, run migrations, seed the catalog, and load all cogs."""
         # Create tables if they don't exist yet (safe no-op when they do)
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        # Add new columns to pre-existing tables (idempotent)
+        await run_migrations(self.engine)
         logger.info("Database ready (%s)", self.config.database_url)
+
+        # Seed the item catalog from data/items.json (no-op if already seeded)
+        async with self.session_factory() as session:
+            seeded = await ItemService.seed(session)
+            if seeded:
+                logger.info("Seeded %d items into the catalog", seeded)
 
         for cog in CORE_COGS:
             await self.load_extension(cog)
             logger.info("Loaded cog: %s", cog)
+
+        # Background hourly passive-income task
+        self._passive_income_task = asyncio.create_task(self.passive_income_loop())
 
         # Sync slash commands with Discord
         try:
@@ -162,8 +182,67 @@ class Fun2OoshBot(commands.Bot):
         except discord.HTTPException:
             pass
 
+    # ------------------------------------------------------------ passive income
+
+    async def passive_income_loop(self) -> None:
+        """Pay hourly passive income to active wallets in guilds that enable it."""
+        try:
+            await self.wait_until_ready()
+            logger.info("Passive income loop started (hourly)")
+            while not self.is_closed():
+                try:
+                    await self._pay_passive_income()
+                except Exception as exc:  # noqa: BLE001 - keep the loop alive
+                    logger.exception("Passive income payment failed: %s", exc)
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            logger.info("Passive income loop stopped")
+            raise
+
+    async def _pay_passive_income(self) -> None:
+        now = datetime.utcnow()
+        async with self.session_factory() as session:
+            for guild in self.guilds:
+                cfg = await GuildConfigService.get(session, guild.id)
+                rate = cfg.passive_income or 0
+                if rate <= 0:
+                    continue
+                member_ids = [m.id for m in guild.members if not m.bot]
+                if not member_ids:
+                    continue
+                # Batch-load wallets for all members in one query
+                wallets = {
+                    w.user_id: w
+                    for w in (
+                        await session.execute(
+                            select(Wallet).where(Wallet.user_id.in_(member_ids))
+                        )
+                    ).scalars()
+                }
+                for user_id in member_ids:
+                    wallet = wallets.get(user_id)
+                    if wallet is None:
+                        continue  # only pay users who have engaged with the economy
+                    if wallet.last_passive_at and (now - wallet.last_passive_at).total_seconds() < 3600:
+                        continue
+                    wallet.balance = (wallet.balance or 0) + rate
+                    wallet.last_passive_at = now
+                    session.add(
+                        Transaction(
+                            user_id=user_id, type='passive', amount=rate,
+                            description='Hourly passive income',
+                        )
+                    )
+                await session.commit()
+            logger.info("Passive income paid (%d guilds checked)", len(self.guilds))
+
     async def close(self) -> None:
-        """Dispose the database engine on shutdown."""
+        """Stop background tasks and dispose the database engine on shutdown."""
+        task = getattr(self, '_passive_income_task', None)
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         await self.engine.dispose()
         await super().close()
 

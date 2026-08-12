@@ -7,9 +7,12 @@ from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import text
 
+from services.guild import AuditService, GuildConfigService, SETTINGS
+from services.items import ItemService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import EmbedBuilder
+from utils.helpers import EmbedBuilder, format_coins
+from utils.pagination import PaginationView
 from bot import Fun2OoshBot
 
 
@@ -171,6 +174,191 @@ class Admin(commands.Cog):
             "All economy data has been permanently deleted and reset."
         )
         await interaction.followup.send(embed=embed)
+
+
+    # --------------------------------------------------- economy config
+
+    @commands.group(name='econfig', aliases=['econf'], invoke_without_command=True)
+    async def econfig(self, ctx: commands.Context):
+        """View the current economy configuration for this server."""
+        if ctx.guild is None:
+            return await ctx.send("❌ This command only works in servers.")
+        async with self.bot.get_session() as session:
+            row = await GuildConfigService.get(session, ctx.guild.id)
+            summary = GuildConfigService.describe(row, self.config)
+
+        embed = EmbedBuilder.success_embed(
+            "⚙️ Economy Configuration",
+            summary,
+        )
+        embed.set_footer(text="Change values with: !econfig set <key> <value>")
+        await ctx.send(embed=embed)
+
+    @econfig.command(name='set')
+    async def econfig_set(self, ctx: commands.Context, key: str, value: str):
+        """Set an economy setting: !econfig set <key> <value>."""
+        if ctx.guild is None:
+            return await ctx.send("❌ This command only works in servers.")
+        async with self.bot.get_session() as session:
+            ok, msg = await GuildConfigService.set(session, ctx.guild.id, key.lower(), value)
+            if ok:
+                await AuditService.log(
+                    session, ctx.author.id, 'econfig_set',
+                    f'{key}={value}', guild_id=ctx.guild.id,
+                )
+        await ctx.send(msg)
+
+    @econfig.command(name='keys')
+    async def econfig_keys(self, ctx: commands.Context):
+        """List all configurable economy settings."""
+        embed = discord.Embed(
+            title="⚙️ Configurable Settings",
+            description="Use `!econfig set <key> <value>` to change one.",
+            color=discord.Color.blurple(),
+        )
+        for key in sorted(SETTINGS):
+            kind, lo, hi, label = SETTINGS[key]
+            bounds = "" if lo is None else f" ({lo}–{hi})" if hi is not None else f" (min {lo})"
+            embed.add_field(name=key, value=f"`{kind}`{bounds}", inline=True)
+        await ctx.send(embed=embed)
+
+    # --------------------------------------------------- item management
+
+    @commands.command(name='itemgive')
+    async def itemgive(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
+        """Give items to a user (admin only)."""
+        if qty <= 0:
+            return await ctx.send("❌ Quantity must be positive.")
+        async with self.bot.get_session() as session:
+            item = await ItemService.get(session, item_id.lower())
+            if item is None:
+                return await ctx.send(f"❌ Unknown item `{item_id}`. Use `!shoplist` to list items.")
+            await ItemService.grant(session, user.id, item, qty)
+            await AuditService.log(
+                session, ctx.author.id, 'item_give',
+                f'{item.id} x{qty} → {user.id}',
+                guild_id=ctx.guild.id if ctx.guild else None, target_id=user.id,
+            )
+        embed = EmbedBuilder.success_embed(
+            "🎁 Item Granted",
+            f"Gave {item.emoji} **{item.name}** x{qty} to {user.mention}.",
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(name='shopadd')
+    async def shopadd(
+        self, ctx: commands.Context, item_id: str, name: str, price: int,
+        category: str = 'misc', sell_price: int = 0, emoji: str = '📦',
+    ):
+        """Add or update an item in the shop: !shopadd <id> <name> <price> [category] [sell_price] [emoji]."""
+        if price < 0 or sell_price < 0:
+            return await ctx.send("❌ Prices cannot be negative.")
+        if sell_price == 0:
+            sell_price = int(price * 0.4)
+
+        from models import Item
+        async with self.bot.get_session() as session:
+            existing = await ItemService.get(session, item_id.lower())
+            if existing:
+                existing.name = name
+                existing.price = price
+                existing.sell_price = sell_price
+                existing.category = category.lower()
+                existing.emoji = emoji
+            else:
+                session.add(
+                    Item(
+                        id=item_id.lower(), name=name, price=price, sell_price=sell_price,
+                        category=category.lower(), emoji=emoji, consumable=False,
+                    )
+                )
+            await session.commit()
+            await AuditService.log(
+                session, ctx.author.id, 'shop_add',
+                f'{item_id.lower()} ({name}) @ {price}',
+                guild_id=ctx.guild.id if ctx.guild else None,
+            )
+        await ctx.send(f"✅ Saved item `{item_id.lower()}` — {emoji} **{name}** for {format_coins(price)}.")
+
+    @commands.command(name='shopremove')
+    async def shopremove(self, ctx: commands.Context, item_id: str):
+        """Remove an item from the shop (admin only)."""
+        from models import Item
+        from sqlalchemy import delete as sa_delete
+        async with self.bot.get_session() as session:
+            item = await ItemService.get(session, item_id.lower())
+            if item is None:
+                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+            await session.execute(sa_delete(Item).where(Item.id == item_id.lower()))
+            await session.commit()
+            await AuditService.log(
+                session, ctx.author.id, 'shop_remove',
+                item_id.lower(), guild_id=ctx.guild.id if ctx.guild else None,
+            )
+        await ctx.send(f"✅ Removed item `{item_id.lower()}` from the catalog.")
+
+    @commands.command(name='shoplist', aliases=['itemlist'])
+    async def shoplist(self, ctx: commands.Context):
+        """List every item in the catalog (admin only)."""
+        async with self.bot.get_session() as session:
+            items = await ItemService.get_all(session, include_limited=True)
+
+        if not items:
+            return await ctx.send("The catalog is empty. Add items with `!shopadd`.")
+
+        pages = []
+        per_page = 10
+        for start in range(0, len(items), per_page):
+            embed = discord.Embed(
+                title="📦 Item Catalog",
+                description="All items including limited ones.",
+                color=discord.Color.blurple(),
+            )
+            for item in items[start:start + per_page]:
+                embed.add_field(
+                    name=f"{item.emoji} {item.name}",
+                    value=(
+                        f"`{item.id}` • {format_coins(item.price)} • "
+                        f"{item.category} • {item.rarity}"
+                        + (" • 🔒limited" if item.limited else "")
+                    ),
+                    inline=False,
+                )
+            embed.set_footer(text=f"Page {start // per_page + 1}/{(len(items) - 1) // per_page + 1}")
+            pages.append(embed)
+
+        view = PaginationView(pages, owner_id=ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
+
+    # --------------------------------------------------------- audit log
+
+    @commands.command(name='audit', aliases=['auditlog'])
+    async def audit(self, ctx: commands.Context, limit: int = 10):
+        """View recent admin actions (admin only)."""
+        if ctx.guild is None:
+            return await ctx.send("❌ This command only works in servers.")
+        limit = max(1, min(limit, 25))
+        async with self.bot.get_session() as session:
+            logs = await AuditService.recent(session, ctx.guild.id, limit)
+
+        if not logs:
+            return await ctx.send("No audit log entries yet.")
+
+        embed = discord.Embed(
+            title=f"📜 Audit Log (last {len(logs)})",
+            color=discord.Color.dark_grey(),
+        )
+        for entry in logs:
+            embed.add_field(
+                name=f"#{entry.id} • {entry.action}",
+                value=(
+                    f"By <@{entry.actor_id}>" + (f" → <@{entry.target_id}>" if entry.target_id else "")
+                    + f"\n{entry.details or ''}"
+                    + f"\n*{entry.created_at.strftime('%Y-%m-%d %H:%M')} UTC*"
+                ),
+                inline=False,
+            )
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

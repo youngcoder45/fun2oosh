@@ -12,12 +12,18 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Bet, Transaction, Wallet
+from services.economy import EconomyService, GuardService
+from services.guild import GuildConfigService
+from services.items import ItemService
+from services.locks import lock_manager
+from services.progression import ACHIEVEMENTS, AchievementService, ProgressionService
 from utils.anti_fraud import anti_fraud
 from utils.cooldowns import check_cooldown, cooldown_manager
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
 from bot import Fun2OoshBot
 from utils.helpers import EmbedBuilder, format_coins, responsible_gaming_notice
+from utils.pagination import PaginationView
 
 
 class Economy(commands.Cog):
@@ -58,42 +64,52 @@ class Economy(commands.Cog):
     async def work(self, ctx: commands.Context):
         """Work to earn some coins."""
         reward = self.config.work_reward
+        if ctx.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
+                reward = GuildConfigService.effective(guild_cfg, self.config, 'work_reward')
 
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
+            final = await EconomyService.reward(
                 session, ctx.author.id, reward, 'work', 'Daily work reward'
             )
+            new = await AchievementService.check(session, ctx.author.id, 'work')
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Work Complete!",
-                    f"You worked hard and earned {format_coins(reward)}!"
-                )
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("An error occurred while processing your work reward.")
+        if final > 0:
+            embed = EmbedBuilder.success_embed(
+                "Work Complete!",
+                f"You worked hard and earned {format_coins(final)}!"
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send("An error occurred while processing your work reward.")
+        await self._announce_achievements(ctx, new)
 
     @app_commands.command(name='work', description='Work to earn coins')
     @app_commands.checks.cooldown(1, 1800, key=lambda i: (i.guild_id, i.user.id))
     async def work_slash(self, interaction: discord.Interaction):
         """Slash command for work."""
         reward = self.config.work_reward
+        if interaction.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
+                reward = GuildConfigService.effective(guild_cfg, self.config, 'work_reward')
 
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
+            final = await EconomyService.reward(
                 session, interaction.user.id, reward, 'work', 'Daily work reward'
             )
+            new = await AchievementService.check(session, interaction.user.id, 'work')
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Work Complete!",
-                    f"You worked hard and earned {format_coins(reward)}!"
-                )
-                await interaction.response.send_message(embed=embed)
-            else:
-                await interaction.response.send_message("An error occurred while processing your work reward.")
+        if final > 0:
+            embed = EmbedBuilder.success_embed(
+                "Work Complete!",
+                f"You worked hard and earned {format_coins(final)}!"
+            )
+            await interaction.response.send_message(embed=embed)
+        else:
+            await interaction.response.send_message("An error occurred while processing your work reward.")
+        await self._announce_achievements(ctx=interaction, new=new)
 
     @commands.command(name='collect', aliases=['hourly'])
     @check_cooldown('collect', 3600)  # 1 hour
@@ -102,19 +118,18 @@ class Economy(commands.Cog):
         reward = 50  # Fixed for now
 
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
+            final = await EconomyService.reward(
                 session, ctx.author.id, reward, 'collect', 'Hourly collect reward'
             )
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Collection Complete!",
-                    f"You collected {format_coins(reward)}!"
-                )
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("An error occurred while processing your collection.")
+        if final > 0:
+            embed = EmbedBuilder.success_embed(
+                "Collection Complete!",
+                f"You collected {format_coins(final)}!"
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send("An error occurred while processing your collection.")
 
     @app_commands.command(name='collect', description='Collect hourly reward')
     @app_commands.checks.cooldown(1, 3600, key=lambda i: (i.guild_id, i.user.id))
@@ -138,88 +153,100 @@ class Economy(commands.Cog):
                 await interaction.response.send_message("An error occurred while processing your collection.")
 
     @commands.command(name='daily', aliases=['d'])
-    @check_cooldown('daily', 86400)  # 24 hours
     async def daily(self, ctx: commands.Context):
-        """Claim your daily reward! 24-hour cooldown for consistent income."""
-        reward = self.config.daily_reward
-
+        """Claim your daily reward! Build streaks for bigger bonuses."""
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, ctx.author.id, reward, 'daily', 'Daily reward'
+            base = self.config.daily_reward
+            if ctx.guild is not None:
+                guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
+                base = GuildConfigService.effective(guild_cfg, self.config, 'daily_reward')
+            ok, msg, reward, streak = await ProgressionService.apply_daily(
+                session, ctx.author.id, base
             )
+            new = await AchievementService.check(session, ctx.author.id, 'daily')
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Daily Reward Claimed!",
-                    f"You claimed your daily reward of {format_coins(reward)}!"
-                )
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("An error occurred while processing your daily reward.")
+        if not ok:
+            return await ctx.send(msg)
+        embed = EmbedBuilder.success_embed(
+            "Daily Reward Claimed!",
+            f"You claimed your daily reward of {format_coins(reward)}!\n"
+            f"🔥 Streak: **{streak}** day(s)" + (" — maximum bonus!" if streak >= 7 else ""),
+        )
+        await ctx.send(embed=embed)
+        await self._announce_achievements(ctx, new)
 
     @app_commands.command(name='daily', description='Claim daily reward')
-    @app_commands.checks.cooldown(1, 86400, key=lambda i: (i.guild_id, i.user.id))
     async def daily_slash(self, interaction: discord.Interaction):
         """Slash command for daily."""
-        reward = self.config.daily_reward
-
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, interaction.user.id, reward, 'daily', 'Daily reward'
+            base = self.config.daily_reward
+            if interaction.guild is not None:
+                guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
+                base = GuildConfigService.effective(guild_cfg, self.config, 'daily_reward')
+            ok, msg, reward, streak = await ProgressionService.apply_daily(
+                session, interaction.user.id, base
             )
+            new = await AchievementService.check(session, interaction.user.id, 'daily')
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Daily Reward Claimed!",
-                    f"You claimed your daily reward of {format_coins(reward)}!"
-                )
-                await interaction.response.send_message(embed=embed)
-            else:
-                await interaction.response.send_message("An error occurred while processing your daily reward.")
+        if not ok:
+            return await interaction.response.send_message(msg)
+        embed = EmbedBuilder.success_embed(
+            "Daily Reward Claimed!",
+            f"You claimed your daily reward of {format_coins(reward)}!\n"
+            f"🔥 Streak: **{streak}** day(s)" + (" — maximum bonus!" if streak >= 7 else ""),
+        )
+        await interaction.response.send_message(embed=embed)
+        await self._announce_achievements(ctx=interaction, new=new)
 
     @commands.command(name='weekly', aliases=['week'])
     @check_cooldown('weekly', 604800)  # 7 days
     async def weekly(self, ctx: commands.Context):
         """Claim your weekly reward! 7-day cooldown for big bonus."""
-        reward = self.config.weekly_reward
+        base = self.config.weekly_reward
+        if ctx.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
+                base = GuildConfigService.effective(guild_cfg, self.config, 'weekly_reward')
 
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, ctx.author.id, reward, 'weekly', 'Weekly reward'
-            )
-
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Weekly Reward Claimed!",
-                    f"You claimed your weekly reward of {format_coins(reward)}!"
+            async with lock_manager.for_user(ctx.author.id):
+                wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
+                reward = int(base * ProgressionService._prestige_multiplier(wallet))
+                await EconomyUtils.add_money(
+                    session, ctx.author.id, reward, 'weekly', 'Weekly reward'
                 )
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("An error occurred while processing your weekly reward.")
+                await session.commit()
+
+        embed = EmbedBuilder.success_embed(
+            "Weekly Reward Claimed!",
+            f"You claimed your weekly reward of {format_coins(reward)}!"
+        )
+        await ctx.send(embed=embed)
 
     @app_commands.command(name='weekly', description='Claim weekly reward')
     @app_commands.checks.cooldown(1, 604800, key=lambda i: (i.guild_id, i.user.id))
     async def weekly_slash(self, interaction: discord.Interaction):
         """Slash command for weekly."""
-        reward = self.config.weekly_reward
+        base = self.config.weekly_reward
+        if interaction.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
+                base = GuildConfigService.effective(guild_cfg, self.config, 'weekly_reward')
 
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, interaction.user.id, reward, 'weekly', 'Weekly reward'
-            )
-
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Weekly Reward Claimed!",
-                    f"You claimed your weekly reward of {format_coins(reward)}!"
+            async with lock_manager.for_user(interaction.user.id):
+                wallet = await EconomyUtils.get_or_create_wallet(session, interaction.user.id)
+                reward = int(base * ProgressionService._prestige_multiplier(wallet))
+                await EconomyUtils.add_money(
+                    session, interaction.user.id, reward, 'weekly', 'Weekly reward'
                 )
-                await interaction.response.send_message(embed=embed)
-            else:
-                await interaction.response.send_message("An error occurred while processing your weekly reward.")
+                await session.commit()
+
+        embed = EmbedBuilder.success_embed(
+            "Weekly Reward Claimed!",
+            f"You claimed your weekly reward of {format_coins(reward)}!"
+        )
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name='deposit', aliases=['dep'])
     async def deposit(self, ctx: commands.Context, amount: str):
@@ -242,7 +269,7 @@ class Economy(commands.Cog):
             await ctx.send("Invalid amount. Please provide a number or 'all'.")
             return
 
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
             if not wallet or wallet.balance < amount_int:
                 await ctx.send("You don't have enough coins in your wallet.")
@@ -288,7 +315,7 @@ class Economy(commands.Cog):
             await interaction.response.send_message("Invalid amount. Please provide a number or 'all'.")
             return
 
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(interaction.user.id), self.bot.get_session() as session:
             wallet = await EconomyUtils.get_wallet(session, interaction.user.id)
             if not wallet or wallet.balance < amount_int:
                 await interaction.response.send_message("You don't have enough coins in your wallet.")
@@ -333,7 +360,7 @@ class Economy(commands.Cog):
             await ctx.send("Invalid amount. Please provide a number or 'all'.")
             return
 
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
             if not wallet or wallet.bank < amount_int:
                 await ctx.send("You don't have enough coins in your bank.")
@@ -379,7 +406,7 @@ class Economy(commands.Cog):
             await interaction.response.send_message("Invalid amount. Please provide a number or 'all'.")
             return
 
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(interaction.user.id), self.bot.get_session() as session:
             wallet = await EconomyUtils.get_wallet(session, interaction.user.id)
             if not wallet or wallet.bank < amount_int:
                 await interaction.response.send_message("You don't have enough coins in your bank.")
@@ -420,19 +447,23 @@ class Economy(commands.Cog):
             await ctx.send(f"Transfer blocked: {reason}")
             return
 
+        tax_rate = 0.0
+        if ctx.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
+                tax_rate = guild_cfg.tax_rate or 0.0
+
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.transfer_money(
+            success, tax = await EconomyService.transfer(
                 session, ctx.author.id, user.id, amount,
-                f'Transfer from {ctx.author.display_name}'
+                f'Transfer from {ctx.author.display_name}', tax_rate=tax_rate,
             )
-            if success:
-                await session.commit()
 
         if success:
-            embed = EmbedBuilder.success_embed(
-                "Transfer Successful",
-                f"You transferred {format_coins(amount)} to {user.mention}."
-            )
+            desc = f"You transferred {format_coins(amount)} to {user.mention}."
+            if tax:
+                desc += f"\n*Transfer tax: {format_coins(tax)}*"
+            embed = EmbedBuilder.success_embed("Transfer Successful", desc)
             await ctx.send(embed=embed)
         else:
             await ctx.send("Transfer failed. Check your balance and try again.")
@@ -455,19 +486,23 @@ class Economy(commands.Cog):
             await interaction.response.send_message(f"Transfer blocked: {reason}")
             return
 
+        tax_rate = 0.0
+        if interaction.guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
+                tax_rate = guild_cfg.tax_rate or 0.0
+
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.transfer_money(
+            success, tax = await EconomyService.transfer(
                 session, interaction.user.id, user.id, amount,
-                f'Transfer from {interaction.user.display_name}'
+                f'Transfer from {interaction.user.display_name}', tax_rate=tax_rate,
             )
-            if success:
-                await session.commit()
 
         if success:
-            embed = EmbedBuilder.success_embed(
-                "Transfer Successful",
-                f"You transferred {format_coins(amount)} to {user.mention}."
-            )
+            desc = f"You transferred {format_coins(amount)} to {user.mention}."
+            if tax:
+                desc += f"\n*Transfer tax: {format_coins(tax)}*"
+            embed = EmbedBuilder.success_embed("Transfer Successful", desc)
             await interaction.response.send_message(embed=embed)
         else:
             await interaction.response.send_message("Transfer failed. Check your balance and try again.")
@@ -518,7 +553,7 @@ class Economy(commands.Cog):
                 f"You begged successfully and got {format_coins(reward)}!"
             ]
             
-            async with self.bot.get_session() as session:
+            async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
                     session, ctx.author.id, reward, 'beg', 'Begging reward'
                 )
@@ -559,11 +594,16 @@ class Economy(commands.Cog):
         ]
         
         crime_desc, min_reward, max_reward = random.choice(crimes)
+
+        if ctx.guild is not None:
+            async with self.bot.get_session() as session:
+                if guard := await self._guard_error(ctx, session):
+                    return await ctx.send(guard)
         
         if success:
             reward = random.randint(min_reward, max_reward)
             
-            async with self.bot.get_session() as session:
+            async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
                     session, ctx.author.id, reward, 'crime', f'Crime: {crime_desc}'
                 )
@@ -577,7 +617,7 @@ class Economy(commands.Cog):
         else:
             fine = random.randint(200, 600)
             
-            async with self.bot.get_session() as session:
+            async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 if wallet.balance >= fine:
                     wallet.balance -= fine
@@ -593,6 +633,10 @@ class Economy(commands.Cog):
             )
             await ctx.send(embed=embed)
 
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, 'crime')
+        await self._announce_achievements(ctx, new)
+
     @commands.command(name='rob', aliases=['steal'])
     @check_cooldown('rob', 600)  # 10 minutes
     async def rob(self, ctx: commands.Context, user: discord.User):
@@ -605,7 +649,9 @@ class Economy(commands.Cog):
         if user.bot:
             return await ctx.send("You can't rob bots!")
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_users(ctx.author.id, user.id), self.bot.get_session() as session:
+            if guard := await self._guard_error(ctx, session):
+                return await ctx.send(guard)
             robber_wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             victim_wallet = await EconomyUtils.get_or_create_wallet(session, user.id)
             
@@ -627,6 +673,14 @@ class Economy(commands.Cog):
                 
                 victim_wallet.balance -= rob_amount
                 robber_wallet.balance += rob_amount
+                session.add(
+                    Transaction(user_id=ctx.author.id, type='rob', amount=rob_amount,
+                                description=f'Robbed {user.display_name}')
+                )
+                session.add(
+                    Transaction(user_id=user.id, type='rob_loss', amount=-rob_amount,
+                                description=f'Robbed by {ctx.author.display_name}')
+                )
                 await session.commit()
                 
                 embed = EmbedBuilder.success_embed(
@@ -641,6 +695,10 @@ class Economy(commands.Cog):
                 
                 robber_wallet.balance -= fine
                 victim_wallet.balance += fine // 2  # Victim gets half
+                session.add(
+                    Transaction(user_id=ctx.author.id, type='rob_fail', amount=-fine,
+                                description=f'Caught robbing {user.display_name}')
+                )
                 await session.commit()
                 
                 embed = discord.Embed(
@@ -650,6 +708,10 @@ class Economy(commands.Cog):
                     color=discord.Color.red()
                 )
                 await ctx.send(embed=embed)
+
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, 'rob')
+        await self._announce_achievements(ctx, new)
 
     @commands.command(name='gamble', aliases=['bet'])
     @check_cooldown('gamble', 30)  # 30 seconds
@@ -663,7 +725,9 @@ class Economy(commands.Cog):
         if amount > 10000:
             return await ctx.send("Maximum gamble is 10,000 coins!")
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
+            if guard := await self._guard_error(ctx, session):
+                return await ctx.send(guard)
             wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             
             if wallet.balance < amount:
@@ -671,6 +735,10 @@ class Economy(commands.Cog):
             
             # Deduct bet
             wallet.balance -= amount
+            session.add(
+                Transaction(user_id=ctx.author.id, type='gamble', amount=amount,
+                            description='Gamble wager')
+            )
             
             # 45% win rate
             won = random.random() < 0.45
@@ -678,6 +746,10 @@ class Economy(commands.Cog):
             if won:
                 payout = amount * 2
                 wallet.balance += payout
+                session.add(
+                    Transaction(user_id=ctx.author.id, type='gamble_win', amount=payout,
+                                description='Gamble payout')
+                )
                 await session.commit()
                 
                 embed = discord.Embed(
@@ -716,6 +788,10 @@ class Economy(commands.Cog):
             
             embed.set_footer(text="Economy • Quick Gamble")
             await ctx.send(embed=embed)
+
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, 'gamble')
+        await self._announce_achievements(ctx, new)
 
     @commands.command(name='richest', aliases=['top10', 'baltop'])
     async def richest(self, ctx: commands.Context):
@@ -774,7 +850,7 @@ class Economy(commands.Cog):
         if amount < 10:
             return await ctx.send("Minimum gift amount is 10 coins!")
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_users(ctx.author.id, user.id), self.bot.get_session() as session:
             sender_wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             
             if sender_wallet.balance < amount:
@@ -793,7 +869,7 @@ class Economy(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    @commands.command(name='search', aliases=['scavenge', 'hunt'])
+    @commands.command(name='search', aliases=['scavenge'])
     @check_cooldown('search', 45)  # 45 seconds
     async def search(self, ctx: commands.Context):
         """Search random places for coins. 80% success rate, earn 5-120 coins from 8 locations. 45-second cooldown."""
@@ -816,7 +892,7 @@ class Economy(commands.Cog):
         if random.random() < 0.8:
             reward = random.randint(min_reward, max_reward)
             
-            async with self.bot.get_session() as session:
+            async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
                     session, ctx.author.id, reward, 'search', f'Searched {location}'
                 )
@@ -832,8 +908,11 @@ class Economy(commands.Cog):
                 description=f"You searched the **{location}** but found nothing...",
                 color=discord.Color.orange()
             )
-        
+
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, 'search')
         await ctx.send(embed=embed)
+        await self._announce_achievements(ctx, new)
 
     @commands.command(name='profile', aliases=['prof', 'stats'])
     async def profile(self, ctx: commands.Context, user: Optional[discord.User] = None):
@@ -857,7 +936,13 @@ class Economy(commands.Cog):
             total_earned = earn_result.scalar() or 0
             await session.commit()  # Persist wallet if it was just created
         
-        total_wealth = wallet.balance + wallet.bank
+        async with self.bot.get_session() as session:
+            achievement_count = await AchievementService.count(session, target.id)
+            inv_rows = await ItemService.list_inventory(session, target.id)
+            inv_count = sum(inv.quantity for inv, _ in inv_rows)
+            inv_value = await ItemService.inventory_value(session, target.id)
+
+        total_wealth = EconomyService.networth(wallet, inv_value)
         
         embed = discord.Embed(
             title=f"📊 {target.display_name}'s Profile",
@@ -875,12 +960,100 @@ class Economy(commands.Cog):
         
         embed.add_field(
             name="📈 STATISTICS",
-            value=f"```\nTransactions: {tx_count}\nTotal Earned: {total_earned:,}\n```",
+            value=f"```\nTransactions: {tx_count}\nTotal Earned: {total_earned:,}\nInventory: {inv_count} items\n```",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⭐ PROGRESSION",
+            value=f"```\nPrestige: {wallet.prestige or 0}\nReputation: {wallet.reputation or 0}\nDaily Streak: {wallet.daily_streak or 0}\nAchievements: {achievement_count}/{len(ACHIEVEMENTS)}\n```",
             inline=False
         )
         
         embed.set_footer(text=f"Economy • User ID: {target.id}")
         await ctx.send(embed=embed)
+
+    @commands.command(name='transactions', aliases=['history', 'tx', 'logs'])
+    async def transactions(self, ctx: commands.Context, user: Optional[discord.User] = None, limit: int = 10):
+        """View your recent transaction history (paginated)."""
+        target = user or ctx.author
+        limit = max(5, min(limit, 25))
+        async with self.bot.get_session() as session:
+            stmt = (
+                select(Transaction)
+                .where(Transaction.user_id == target.id)
+                .order_by(Transaction.id.desc())
+                .limit(limit)
+            )
+            txs = list((await session.execute(stmt)).scalars())
+
+        if not txs:
+            return await ctx.send(f"No transactions found for {target.display_name}.")
+
+        pages = []
+        per_page = 6
+        for start in range(0, len(txs), per_page):
+            embed = discord.Embed(
+                title=f"🧾 {target.display_name}'s Transactions",
+                color=discord.Color.dark_teal(),
+            )
+            for tx in txs[start:start + per_page]:
+                sign = "+" if tx.amount >= 0 else ""
+                embed.add_field(
+                    name=f"{tx.type} • {sign}{tx.amount:,}",
+                    value=f"{tx.description or '—'}\n*{tx.timestamp:%Y-%m-%d %H:%M} UTC*",
+                    inline=False,
+                )
+            embed.set_footer(text=f"Page {start // per_page + 1}/{(len(txs) - 1) // per_page + 1}")
+            pages.append(embed)
+
+        view = PaginationView(pages, owner_id=ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
+
+    @commands.command(name='prestige', aliases=['prest'])
+    async def prestige(self, ctx: commands.Context):
+        """Reset your wealth for +1 prestige (requires 1,000,000 net worth). +2% rewards per level."""
+        async with self.bot.get_session() as session:
+            ok, msg = await ProgressionService.prestige(session, ctx.author.id)
+            new = await AchievementService.check(session, ctx.author.id, 'prestige') if ok else []
+
+        if ok:
+            embed = EmbedBuilder.success_embed("✨ Prestige Up!", msg)
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(msg)
+        await self._announce_achievements(ctx, new)
+
+    # ------------------------------------------------------------------- helpers
+
+    @staticmethod
+    async def _announce_achievements(ctx, new_achievements):
+        """Send an embed for newly unlocked achievements (works for ctx or interaction)."""
+        if not new_achievements:
+            return
+        lines = "\n".join(
+            f"{a['emoji']} **{a['name']}** — {a['desc']}" for a in new_achievements
+        )
+        embed = discord.Embed(
+            title="🏅 Achievements Unlocked!",
+            description=lines,
+            color=discord.Color.gold(),
+        )
+        send = getattr(ctx, "send", None)
+        if send is not None:
+            await send(embed=embed)
+        else:
+            try:
+                await ctx.followup.send(embed=embed)
+            except Exception:
+                await ctx.response.send_message(embed=embed)
+
+    async def _guard_error(self, ctx, session) -> Optional[str]:
+        """Return a block message if anti-alt protection triggers, else None."""
+        if ctx.guild is None:
+            return None
+        guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
+        return GuardService.check_user_allowed(ctx.author, guild_cfg)
 
 
 async def setup(bot):

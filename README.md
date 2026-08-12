@@ -1,29 +1,42 @@
 # Fun2Oosh Economy Bot 🎰💰
 
-A standalone Discord economy & casino bot with wallets, banks, daily/weekly rewards,
-crimes, robberies, gambling games (blackjack, slots, roulette, poker, crash and more),
-transfers, leaderboards, and anti-fraud protection.
+A standalone Discord economy & casino bot with wallets, banks, rewards, streaks,
+achievements, prestige, a full item shop & inventory, trading, gambling games,
+transfers, leaderboards, and anti-abuse protection.
+
+See `AUDIT.md` for the full feature-parity audit, database changes, and security review.
 
 ## Features
 
 ### Economy (`cogs/economy.py`)
 - `!balance` / `/balance` — wallet & bank overview
-- `!work`, `!daily`, `!weekly`, `!collect` — recurring income
-- `!beg`, `!search`, `!crime`, `!rob` — risky money makers
+- `!work`, `!collect`, `!daily` (with streaks 🔥), `!weekly`, `!monthly` — recurring income
+- `!beg`, `!search`, `!crime`, `!rob`, `!hunt`, `!fish`, `!mine`, `!slut` — risky money makers
 - `!deposit` / `!withdraw` — move money between wallet and bank
-- `!transfer` / `!give` — send coins to other users
-- `!leaderboard` / `!richest` / `!profile` — stats
+- `!transfer` / `!give` — send coins to other users (per-guild transfer tax optional)
 - `!gamble` — quick coinflip-style bet
+- `!leaderboard` / `!richest` / `!networth` / `!profile` / `!prestige` — stats & progression
+- `!rep <user>` — give reputation (12h cooldown)
+- `!achievements` / `!badges` — 13 unlockable achievements
+- `!transactions` / `!history` — paginated transaction log
+
+### Shop & Inventory (`cogs/shop.py`)
+- `!shop [category]`, `!buy <item> [qty]`, `!sell <item> [qty]`, `!iteminfo <item>`
+- `!inventory` / `!inv`, `!giveitem <user> <item> [qty]`, `!trade <user> <item> [qty]`
+- `!use <item>` — consumables (coins), **boosters** (1.5x/2x money), **crates/lootboxes**
+- Tools boost rewards: fishing rod → `!fish`, pickaxe → `!mine`, rifle → `!hunt`
 
 ### Casino (`cogs/casino.py`)
 - `!blackjack`, `!poker`, `!roulette`, `!slots`, `!coinflip`, `!dice`
 - `!crash`, `!russianroulette`, `!war`, `!baccarat`, `!hilo`, `!keno`
 
 ### Admin (`cogs/admin_economy.py`)
-- `!add_money <user> <amount>` — grant coins (owner / server admins)
-- `!reset_economy CONFIRM` — wipe all economy data (owner only)
+- `!add_money <user> <amount>`, `!reset_economy CONFIRM`
+- `!econfig` / `!econfig set <key> <value>` — rewards, bet limits, tax rate, passive income, anti-alt
+- `!shopadd`, `!shopremove`, `!shoplist`, `!itemgive <user> <item> [qty]`
+- `!audit [n]` — admin action log
 
-All commands also work as slash commands (e.g. `/balance`, `/blackjack`).
+All commands also work as slash commands where marked hybrid (e.g. `/balance`, `/shop`, `/buy`).
 
 ## Setup
 
@@ -81,17 +94,26 @@ All settings live in `utils/config.py` and can be overridden via `.env`:
 bot.py                 # Entry point + Fun2OoshBot class
 config.py              # Re-exports Config
 cogs/
-  economy.py           # Wallet / income commands
+  economy.py           # Wallet / income / progression commands
   casino.py            # Gambling games
-  admin_economy.py     # Admin commands
-models/
-  base.py user.py wallet.py transaction.py bet.py
+  shop.py              # Shop, inventory, trading, crates
+  activities.py        # hunt/fish/mine/slut, monthly, networth, rep, achievements
+  admin_economy.py     # Admin, config, shop & item management, audit
+models/                # SQLAlchemy models (incl. items, inventory, guild_config, ...)
+services/
+  locks.py             # Per-user asyncio locks (race-condition safety)
+  economy.py           # Lock-aware money service + anti-alt guard
+  items.py             # Catalog, inventory, boosters, crates
+  progression.py       # Achievements, streaks, prestige, reputation
+  guild.py             # Guild config overrides + audit log
 utils/
   config.py            # Canonical Config (pydantic-settings)
   economy_utils.py     # DB helpers (add/transfer money, wallets)
   cooldowns.py         # Per-user cooldowns
   anti_fraud.py        # Bet/transfer fraud detection
   helpers.py           # Embeds + formatting
+  migrations.py        # Idempotent schema migrations
+  pagination.py        # Reusable embed pagination
 ```
 
 ## Responsible gaming

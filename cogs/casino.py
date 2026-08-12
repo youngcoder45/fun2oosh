@@ -25,6 +25,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot import Fun2OoshBot
+from services.locks import lock_manager
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
 from utils.cooldowns import cooldown_manager
@@ -544,7 +545,7 @@ class Casino(commands.Cog):
             )
             return
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -580,7 +581,7 @@ class Casino(commands.Cog):
     )
     async def roulette(self, ctx: commands.Context, bet_type: str, value: Optional[str], amount: int):
         """European roulette - Bet on numbers (36x), colors (2x), odd/even (2x), or ranges (2x)."""
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, amount, session)
             if not valid:
@@ -722,7 +723,7 @@ class Casino(commands.Cog):
     @app_commands.describe(bet="Amount to bet")
     async def slots(self, ctx: commands.Context, bet: int):
         """Slot machine - Match 3 symbols to win! Payouts from 3x to 50x."""
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -803,7 +804,7 @@ class Casino(commands.Cog):
         # Normalize choice
         choice = 'heads' if choice in ['heads', 'h'] else 'tails'
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -875,7 +876,7 @@ class Casino(commands.Cog):
         """Dice - Roll 2 dice! Bet on over/under (2x), seven (4x), or exact number (10x)."""
         prediction = prediction.lower()
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -972,7 +973,7 @@ class Casino(commands.Cog):
             await ctx.send("❌ Target must be between 1.1x and 100x!", ephemeral=True)
             return
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -1048,7 +1049,7 @@ class Casino(commands.Cog):
     @app_commands.describe(bet="Amount to bet")
     async def russian_roulette(self, ctx: commands.Context, bet: int):
         """Russian Roulette - 1 in 6 chance to lose! Survive for 5x payout. Ultimate risk!"""
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -1123,7 +1124,7 @@ class Casino(commands.Cog):
     @app_commands.describe(bet="Amount to bet")
     async def war(self, ctx: commands.Context, bet: int):
         """War - Simple card battle! Higher card wins 2x, tie returns bet."""
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -1216,7 +1217,7 @@ class Casino(commands.Cog):
             await ctx.send("Invalid bet! Choose: player, banker, or tie", ephemeral=True)
             return
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, amount, session)
             if not valid:
@@ -1346,7 +1347,7 @@ class Casino(commands.Cog):
         
         guess = 'high' if guess in ['high', 'h'] else 'low'
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -1462,7 +1463,7 @@ class Casino(commands.Cog):
             await ctx.send("Invalid format! Example: `5 12 23 45 67`", ephemeral=True)
             return
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:
@@ -1576,7 +1577,7 @@ class Casino(commands.Cog):
         if bet > 1_000_000:
             return await ctx.send("❌ Maximum bet is 1,000,000 coins!")
         
-        async with self.bot.get_session() as session:
+        async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, bet, session)
             if not valid:

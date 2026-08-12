@@ -26,5 +26,13 @@ class Wallet(Base):
     daily_wagered: Mapped[int] = mapped_column(Integer, default=0)
     last_daily_reset: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Progression (added via migration on existing databases)
+    prestige: Mapped[int] = mapped_column(Integer, default=0)
+    reputation: Mapped[int] = mapped_column(Integer, default=0)
+    daily_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_daily_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_monthly_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_passive_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     def __repr__(self) -> str:
         return f"<Wallet(user_id={self.user_id}, balance={self.balance}, bank={self.bank})>"
