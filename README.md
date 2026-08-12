@@ -1,4 +1,4 @@
-# Fun2Oosh Economy Bot 🎰💰
+# Fun2Oosh Economy Bot
 
 A standalone Discord economy & casino bot with wallets, banks, rewards, streaks,
 achievements, prestige, a full item shop & inventory, trading, gambling games,
@@ -10,7 +10,7 @@ See `AUDIT.md` for the full feature-parity audit, database changes, and security
 
 ### Economy (`cogs/economy.py`)
 - `!balance` / `/balance` — wallet & bank overview
-- `!work`, `!collect`, `!daily` (with streaks 🔥), `!weekly`, `!monthly` — recurring income
+- `!work`, `!collect`, `!daily` (with streaks), `!weekly`, `!monthly` — recurring income
 - `!beg`, `!search`, `!crime`, `!rob`, `!hunt`, `!fish`, `!mine`, `!slut` — risky money makers
 - `!deposit` / `!withdraw` — move money between wallet and bank
 - `!transfer` / `!give` — send coins to other users (per-guild transfer tax optional)
@@ -115,6 +115,22 @@ utils/
   migrations.py        # Idempotent schema migrations
   pagination.py        # Reusable embed pagination
 ```
+
+## Development & CI
+
+Lint and type-check before pushing — CI runs the same checks on every push/PR
+(see `.github/workflows/ci.yml`):
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt   # adds ruff + mypy
+.venv/bin/ruff check .                          # lint
+.venv/bin/mypy .                                # type check
+.venv/bin/python -m compileall -q bot.py config.py cogs models services utils
+```
+
+The CI matrix runs on Python 3.10 and 3.12, then boots the bot against a
+throwaway SQLite database to verify all cogs load and the core commands
+register.
 
 ## Responsible gaming
 

@@ -53,7 +53,7 @@ class Shop(commands.Cog):
 
     def _item_embed(self, item) -> discord.Embed:
         embed = discord.Embed(
-            title=f"{item.emoji} {item.name}",
+            title=item.name,
             description=item.description or "*No description.*",
             color=RARITY_COLORS.get(item.rarity, 0x2F3136),
         )
@@ -61,8 +61,8 @@ class Shop(commands.Cog):
         embed.add_field(name="Rarity", value=item.rarity.title(), inline=True)
         embed.add_field(name="Price", value=format_coins(item.price), inline=True)
         embed.add_field(name="Sell Price", value=format_coins(item.sell_price), inline=True)
-        embed.add_field(name="Stackable", value="✅" if item.stackable else "❌", inline=True)
-        embed.add_field(name="Usable", value="✅" if item.consumable else "❌", inline=True)
+        embed.add_field(name="Stackable", value="" if item.stackable else "", inline=True)
+        embed.add_field(name="Usable", value="" if item.consumable else "", inline=True)
         embed.set_footer(text=f"Item ID: {item.id} • Buy with: !buy {item.id} [qty]")
         return embed
 
@@ -73,7 +73,7 @@ class Shop(commands.Cog):
 
         if not items:
             embed = discord.Embed(
-                title="🛒 Shop", description="No items available in this category.", color=0x2F3136
+                title="Shop", description="No items available in this category.", color=0x2F3136
             )
             return [embed]
 
@@ -82,13 +82,13 @@ class Shop(commands.Cog):
         for start in range(0, len(items), per_page):
             chunk = items[start:start + per_page]
             embed = discord.Embed(
-                title="🛒 Shop Catalog",
+                title="Shop Catalog",
                 description=f"Category: **{category or 'all'}** • `!buy <id> [qty]`",
                 color=0x2F3136,
             )
             for item in chunk:
                 embed.add_field(
-                    name=f"{item.emoji} {item.name}",
+                    name=item.name,
                     value=f"`{item.id}` — {format_coins(item.price)} ({item.rarity.title()})",
                     inline=False,
                 )
@@ -115,7 +115,7 @@ class Shop(commands.Cog):
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
         if item is None:
-            await ctx.send(f"❌ Unknown item `{item_id}`. Use `!shop` to see the catalog.")
+            await ctx.send(f"Unknown item `{item_id}`. Use `!shop` to see the catalog.")
             return
         await ctx.send(embed=self._item_embed(item))
 
@@ -126,17 +126,17 @@ class Shop(commands.Cog):
     async def buy(self, ctx: commands.Context, item_id: str, qty: int = 1):
         """Buy an item from the shop."""
         if qty <= 0:
-            return await ctx.send("❌ Quantity must be positive.")
+            return await ctx.send("Quantity must be positive.")
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
-                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+                return await ctx.send(f"Unknown item `{item_id}`.")
             if item.limited:
-                return await ctx.send(f"❌ **{item.name}** is a limited item and cannot be bought.")
+                return await ctx.send(f"**{item.name}** is a limited item and cannot be bought.")
             if item.price <= 0:
-                return await ctx.send(f"❌ **{item.name}** is not for sale.")
+                return await ctx.send(f"**{item.name}** is not for sale.")
             if not item.stackable and qty != 1:
-                return await ctx.send("❌ That item is not stackable — quantity must be 1.")
+                return await ctx.send("That item is not stackable — quantity must be 1.")
 
             total = item.price * qty
 
@@ -144,7 +144,7 @@ class Shop(commands.Cog):
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 if wallet.balance < total:
                     return await ctx.send(
-                        f"❌ You need {format_coins(total)} but only have {format_coins(wallet.balance)}."
+                        f"You need {format_coins(total)} but only have {format_coins(wallet.balance)}."
                     )
                 wallet.balance -= total
                 await ItemService._grant_raw(session, ctx.author.id, item, qty)
@@ -158,8 +158,8 @@ class Shop(commands.Cog):
                 )
                 await session.commit()
                 embed = EmbedBuilder.success_embed(
-                    "🛒 Purchase Complete!",
-                    f"You bought {item.emoji} **{item.name}** x{qty} for {format_coins(total)}.\n"
+                    "Purchase Complete!",
+                    f"You bought **{item.name}** x{qty} for {format_coins(total)}.\n"
                     f"New balance: {format_coins(wallet.balance)}",
                 )
                 await ctx.send(embed=embed)
@@ -172,18 +172,18 @@ class Shop(commands.Cog):
     async def sell(self, ctx: commands.Context, item_id: str, qty: int = 1):
         """Sell items back for coins."""
         if qty <= 0:
-            return await ctx.send("❌ Quantity must be positive.")
+            return await ctx.send("Quantity must be positive.")
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
-                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+                return await ctx.send(f"Unknown item `{item_id}`.")
             if item.sell_price <= 0:
-                return await ctx.send(f"❌ **{item.name}** cannot be sold.")
+                return await ctx.send(f"**{item.name}** cannot be sold.")
 
             async with lock_manager.for_user(ctx.author.id):
                 inv = await ItemService._get_inv(session, ctx.author.id, item.id)
                 if inv is None or inv.quantity < qty:
-                    return await ctx.send(f"❌ You don't have {qty}x **{item.name}**.")
+                    return await ctx.send(f"You don't have {qty}x **{item.name}**.")
 
                 total = item.sell_price * qty
                 inv.quantity -= qty
@@ -195,8 +195,8 @@ class Shop(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.success_embed(
-                "💰 Sold!",
-                f"You sold {item.emoji} **{item.name}** x{qty} for {format_coins(total)}.",
+                "Sold!",
+                f"You sold **{item.name}** x{qty} for {format_coins(total)}.",
             )
             await ctx.send(embed=embed)
 
@@ -209,11 +209,11 @@ class Shop(commands.Cog):
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
-                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+                return await ctx.send(f"Unknown item `{item_id}`.")
             ok, msg = await ItemService.use_item(session, ctx.author.id, item)
             if not ok:
                 return await ctx.send(msg)
-            embed = EmbedBuilder.success_embed(f"✅ {item.name}", msg)
+            embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
             new = await AchievementService.check(session, ctx.author.id, 'use')
@@ -241,12 +241,12 @@ class Shop(commands.Cog):
         per_page = 8
         for start in range(0, len(rows), per_page):
             embed = discord.Embed(
-                title=f"🎒 {target.display_name}'s Inventory",
+                title=f"{target.display_name}'s Inventory",
                 color=0x2F3136,
             )
             for inv, item in rows[start:start + per_page]:
                 embed.add_field(
-                    name=f"{item.emoji} {item.name}",
+                    name=item.name,
                     value=(
                         f"Qty: **{inv.quantity}** • Sell: {format_coins(item.sell_price)} "
                         f"• `{item.id}`"
@@ -265,24 +265,24 @@ class Shop(commands.Cog):
     async def giveitem(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
         """Give items to another user."""
         if user == ctx.author:
-            return await ctx.send("❌ You can't give items to yourself.")
+            return await ctx.send("You can't give items to yourself.")
         if user.bot:
-            return await ctx.send("❌ You can't give items to bots.")
+            return await ctx.send("You can't give items to bots.")
         if qty <= 0:
-            return await ctx.send("❌ Quantity must be positive.")
+            return await ctx.send("Quantity must be positive.")
 
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
-                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+                return await ctx.send(f"Unknown item `{item_id}`.")
 
             ok = await ItemService.transfer(session, ctx.author.id, user.id, item, qty)
             if not ok:
-                return await ctx.send(f"❌ You don't have {qty}x **{item.name}**.")
+                return await ctx.send(f"You don't have {qty}x **{item.name}**.")
 
             embed = EmbedBuilder.success_embed(
-                "🎁 Item Gifted!",
-                f"You gave {item.emoji} **{item.name}** x{qty} to {user.mention}.",
+                "Item Gifted!",
+                f"You gave **{item.name}** x{qty} to {user.mention}.",
             )
             await ctx.send(embed=embed)
 
@@ -305,19 +305,19 @@ class Shop(commands.Cog):
         `!trade @you <item> <qty>` to complete the exchange.
         """
         if user == ctx.author:
-            return await ctx.send("❌ You can't trade with yourself.")
+            return await ctx.send("You can't trade with yourself.")
         if user.bot:
-            return await ctx.send("❌ You can't trade with bots.")
+            return await ctx.send("You can't trade with bots.")
         if qty <= 0:
-            return await ctx.send("❌ Quantity must be positive.")
+            return await ctx.send("Quantity must be positive.")
 
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
-                return await ctx.send(f"❌ Unknown item `{item_id}`.")
+                return await ctx.send(f"Unknown item `{item_id}`.")
             have = await ItemService.count(session, ctx.author.id, item.id)
             if have < qty:
-                return await ctx.send(f"❌ You only have {have}x **{item.name}**.")
+                return await ctx.send(f"You only have {have}x **{item.name}**.")
 
             # Complete a pending trade from the partner?
             pending = self._pending_offer(user.id, ctx.author.id)
@@ -325,18 +325,18 @@ class Shop(commands.Cog):
                 partner_item = await ItemService.get(session, pending.item_id)
                 if partner_item is None:
                     self.trades.remove(pending)
-                    return await ctx.send("❌ The other offer's item no longer exists.")
+                    return await ctx.send("The other offer's item no longer exists.")
                 if pending.item_id == item.id:
-                    return await ctx.send("❌ Both offers can't be the same item.")
+                    return await ctx.send("Both offers can't be the same item.")
 
                 # swap both directions atomically
                 async with lock_manager.for_users(ctx.author.id, user.id):
                     my_inv = await ItemService._get_inv(session, ctx.author.id, item.id)
                     their_inv = await ItemService._get_inv(session, user.id, pending.item_id)
                     if my_inv is None or my_inv.quantity < qty:
-                        return await ctx.send("❌ You no longer have that item.")
+                        return await ctx.send("You no longer have that item.")
                     if their_inv is None or their_inv.quantity < pending.qty:
-                        return await ctx.send("❌ The other user no longer has their item.")
+                        return await ctx.send("The other user no longer has their item.")
 
                     my_inv.quantity -= qty
                     if my_inv.quantity <= 0:
@@ -351,16 +351,16 @@ class Shop(commands.Cog):
 
                 self.trades.remove(pending)
                 embed = EmbedBuilder.success_embed(
-                    "🤝 Trade Complete!",
-                    f"You gave {item.emoji} **{item.name}** x{qty} to {user.mention} "
-                    f"and received {partner_item.emoji} **{partner_item.name}** x{pending.qty}.",
+                    "Trade Complete!",
+                    f"You gave **{item.name}** x{qty} to {user.mention} "
+                    f"and received **{partner_item.name}** x{pending.qty}.",
                 )
                 return await ctx.send(embed=embed)
 
             # Register a new offer
             self.trades.append(TradeOffer(ctx.author.id, user.id, item.id, qty))
             await ctx.send(
-                f"📦 **Trade offer sent!** You offered {item.emoji} **{item.name}** x{qty} "
+                f"**Trade offer sent!** You offered **{item.name}** x{qty} "
                 f"to {user.mention}.\n"
                 f"To accept, {user.display_name} should run:\n"
                 f"`{ctx.prefix}trade {ctx.author.mention} <their-item> <qty>`\n"
@@ -374,10 +374,10 @@ class Shop(commands.Cog):
         if not new_achievements:
             return
         lines = "\n".join(
-            f"{a['emoji']} **{a['name']}** — {a['desc']}" for a in new_achievements
+            f"**{a['name']}** — {a['desc']}" for a in new_achievements
         )
         embed = discord.Embed(
-            title="🏅 Achievements Unlocked!",
+            title="Achievements Unlocked!",
             description=lines,
             color=discord.Color.gold(),
         )

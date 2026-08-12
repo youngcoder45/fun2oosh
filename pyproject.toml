@@ -1,0 +1,24 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+no_implicit_optional = false
+exclude = ["\\.venv/"]
+
+# discord.py's stubs type hybrid/group command callbacks with `Never`
+# parameters, which real cog method signatures never match. This is
+# stub noise only: the commands themselves are verified at boot and
+# in the functional tests.
+[[tool.mypy.overrides]]
+module = ["cogs.casino", "cogs.shop", "cogs.admin_economy"]
+disable_error_code = ["arg-type"]

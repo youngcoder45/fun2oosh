@@ -8,7 +8,6 @@ import random
 from typing import List, Optional
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 from bot import Fun2OoshBot
@@ -68,12 +67,12 @@ class Activities(commands.Cog):
                     session, ctx.author.id, int(reward * tool_mult), key, f'{key.title()} reward'
                 )
                 embed = EmbedBuilder.success_embed(
-                    "✅ Success!",
+                    "Success!",
                     SUCCESS_LINES[key].format(coins=format_coins(final)),
                 )
             else:
                 embed = discord.Embed(
-                    title="❌ No Luck",
+                    title="No Luck",
                     description=f"{fail_text} Maybe next time!",
                     color=discord.Color.red(),
                 )
@@ -118,7 +117,7 @@ class Activities(commands.Cog):
                 reward = random.randint(SLUT_MIN, SLUT_MAX)
                 final = await EconomyService.reward(session, ctx.author.id, reward, 'slut', 'Slut success')
                 embed = EmbedBuilder.success_embed(
-                    "💃 Success!",
+                    "Success!",
                     f"You hustled and earned {format_coins(final)}!",
                 )
             else:
@@ -128,13 +127,13 @@ class Activities(commands.Cog):
                 )
                 if paid:
                     embed = discord.Embed(
-                        title="🚨 Caught!",
+                        title="Caught!",
                         description=f"You were caught and fined {format_coins(fine)}.",
                         color=discord.Color.red(),
                     )
                 else:
                     embed = discord.Embed(
-                        title="🚨 Caught!",
+                        title="Caught!",
                         description="You were caught, but you had no coins to pay the fine!",
                         color=discord.Color.red(),
                     )
@@ -155,7 +154,7 @@ class Activities(commands.Cog):
 
             ok, msg = await ProgressionService.apply_monthly(session, ctx.author.id, base)
         if ok:
-            embed = EmbedBuilder.success_embed("📅 Monthly Reward Claimed!", msg)
+            embed = EmbedBuilder.success_embed("Monthly Reward Claimed!", msg)
             await ctx.send(embed=embed)
         else:
             await ctx.send(msg)
@@ -173,27 +172,27 @@ class Activities(commands.Cog):
             await session.commit()
 
         embed = discord.Embed(
-            title=f"📊 {target.display_name}'s Net Worth",
+            title=f"{target.display_name}'s Net Worth",
             color=discord.Color.teal(),
         )
-        embed.add_field(name="💵 Wallet", value=format_coins(wallet.balance), inline=True)
-        embed.add_field(name="🏦 Bank", value=format_coins(wallet.bank), inline=True)
-        embed.add_field(name="🎒 Inventory", value=format_coins(inv_value), inline=True)
-        embed.add_field(name="💰 Total", value=f"**{format_coins(total)}**", inline=False)
+        embed.add_field(name="Wallet", value=format_coins(wallet.balance), inline=True)
+        embed.add_field(name="Bank", value=format_coins(wallet.bank), inline=True)
+        embed.add_field(name="Inventory", value=format_coins(inv_value), inline=True)
+        embed.add_field(name="Total", value=f"**{format_coins(total)}**", inline=False)
         await ctx.send(embed=embed)
 
     # ------------------------------------------------------------ reputation
 
     @commands.command(name='rep', aliases=['reputation'])
-    @check_cooldown('rep', 43200)  # 12 hours per giver
+    @check_cooldown('rep', 43200) # 12 hours per giver
     async def rep(self, ctx: commands.Context, user: discord.User):
         """Give reputation to a user (12h cooldown)."""
         if ctx.guild is None:
-            return await ctx.send("❌ Reputation can only be given in servers.")
+            return await ctx.send("Reputation can only be given in servers.")
         if user == ctx.author:
-            return await ctx.send("❌ You can't give reputation to yourself.")
+            return await ctx.send("You can't give reputation to yourself.")
         if user.bot:
-            return await ctx.send("❌ You can't give reputation to bots.")
+            return await ctx.send("You can't give reputation to bots.")
 
         async with self.bot.get_session() as session:
             await ProgressionService.give_reputation(session, user.id)
@@ -201,7 +200,7 @@ class Activities(commands.Cog):
             count = wallet.reputation or 0
 
         embed = EmbedBuilder.success_embed(
-            "⭐ Reputation Given!",
+            "Reputation Given!",
             f"You gave a reputation point to {user.mention} — they now have **{count}**.",
         )
         await ctx.send(embed=embed)
@@ -216,14 +215,14 @@ class Activities(commands.Cog):
             unlocked = set(await AchievementService.unlocked_ids(session, target.id))
 
         embed = discord.Embed(
-            title=f"🏅 {target.display_name}'s Achievements",
+            title=f"{target.display_name}'s Achievements",
             description=f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked",
             color=discord.Color.gold(),
         )
         for aid, meta in ACHIEVEMENTS.items():
             done = aid in unlocked
             embed.add_field(
-                name=f"{'✅' if done else '🔒'} {meta['emoji']} {meta['name']}",
+                name=f"{'UNLOCKED' if done else 'LOCKED'} {meta['name']}",
                 value=f"{meta['desc']}" if done else f"Locked — {meta['desc']}",
                 inline=False,
             )
@@ -236,10 +235,10 @@ class Activities(commands.Cog):
         if not new_achievements:
             return
         lines = "\n".join(
-            f"{a['emoji']} **{a['name']}** — {a['desc']}" for a in new_achievements
+            f"**{a['name']}** — {a['desc']}" for a in new_achievements
         )
         embed = discord.Embed(
-            title="🏅 Achievements Unlocked!",
+            title="Achievements Unlocked!",
             description=lines,
             color=discord.Color.gold(),
         )

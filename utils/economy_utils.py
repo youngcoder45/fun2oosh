@@ -2,7 +2,6 @@
 Utility functions for economy operations.
 """
 
-import asyncio
 from typing import Optional
 
 from sqlalchemy import select

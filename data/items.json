@@ -7,8 +7,10 @@
     "sell_price": 300,
     "category": "tool",
     "rarity": "common",
-    "emoji": "🎣",
-    "effects": {"tool": "fish", "multiplier": 1.5}
+    "effects": {
+      "tool": "fish",
+      "multiplier": 1.5
+    }
   },
   {
     "id": "pickaxe",
@@ -18,8 +20,10 @@
     "sell_price": 360,
     "category": "tool",
     "rarity": "common",
-    "emoji": "⛏️",
-    "effects": {"tool": "mine", "multiplier": 1.5}
+    "effects": {
+      "tool": "mine",
+      "multiplier": 1.5
+    }
   },
   {
     "id": "hunting_rifle",
@@ -29,8 +33,10 @@
     "sell_price": 480,
     "category": "tool",
     "rarity": "uncommon",
-    "emoji": "🔫",
-    "effects": {"tool": "hunt", "multiplier": 1.5}
+    "effects": {
+      "tool": "hunt",
+      "multiplier": 1.5
+    }
   },
   {
     "id": "lollipop",
@@ -41,8 +47,10 @@
     "category": "consumable",
     "consumable": true,
     "rarity": "common",
-    "emoji": "🍭",
-    "effects": {"money_min": 10, "money_max": 50}
+    "effects": {
+      "money_min": 10,
+      "money_max": 50
+    }
   },
   {
     "id": "coffee",
@@ -53,8 +61,10 @@
     "category": "consumable",
     "consumable": true,
     "rarity": "common",
-    "emoji": "☕",
-    "effects": {"money_min": 50, "money_max": 200}
+    "effects": {
+      "money_min": 50,
+      "money_max": 200
+    }
   },
   {
     "id": "pizza",
@@ -65,8 +75,10 @@
     "category": "consumable",
     "consumable": true,
     "rarity": "common",
-    "emoji": "🍕",
-    "effects": {"money_min": 150, "money_max": 400}
+    "effects": {
+      "money_min": 150,
+      "money_max": 400
+    }
   },
   {
     "id": "energy_drink",
@@ -77,8 +89,10 @@
     "category": "consumable",
     "consumable": true,
     "rarity": "uncommon",
-    "emoji": "🥤",
-    "effects": {"money_min": 300, "money_max": 700}
+    "effects": {
+      "money_min": 300,
+      "money_max": 700
+    }
   },
   {
     "id": "lucky_charm",
@@ -89,8 +103,13 @@
     "category": "booster",
     "consumable": true,
     "rarity": "rare",
-    "emoji": "🍀",
-    "effects": {"booster": {"type": "all", "multiplier": 1.5, "duration": 3600}}
+    "effects": {
+      "booster": {
+        "type": "all",
+        "multiplier": 1.5,
+        "duration": 3600
+      }
+    }
   },
   {
     "id": "booster_2x",
@@ -101,8 +120,13 @@
     "category": "booster",
     "consumable": true,
     "rarity": "epic",
-    "emoji": "🚀",
-    "effects": {"booster": {"type": "all", "multiplier": 2.0, "duration": 1800}}
+    "effects": {
+      "booster": {
+        "type": "all",
+        "multiplier": 2.0,
+        "duration": 1800
+      }
+    }
   },
   {
     "id": "mystery_crate",
@@ -113,16 +137,25 @@
     "category": "crate",
     "consumable": true,
     "rarity": "uncommon",
-    "emoji": "🎁",
     "effects": {
       "crate": true,
       "money_chance": 0.7,
       "money_min": 200,
       "money_max": 800,
       "items": [
-        {"id": "lollipop", "chance": 0.4, "qty": 2},
-        {"id": "lucky_charm", "chance": 0.15},
-        {"id": "gem", "chance": 0.05}
+        {
+          "id": "lollipop",
+          "chance": 0.4,
+          "qty": 2
+        },
+        {
+          "id": "lucky_charm",
+          "chance": 0.15
+        },
+        {
+          "id": "gem",
+          "chance": 0.05
+        }
       ]
     }
   },
@@ -135,17 +168,28 @@
     "category": "crate",
     "consumable": true,
     "rarity": "epic",
-    "emoji": "🧰",
     "effects": {
       "crate": true,
       "money_chance": 0.8,
       "money_min": 500,
       "money_max": 2500,
       "items": [
-        {"id": "energy_drink", "chance": 0.5},
-        {"id": "trophy", "chance": 0.25},
-        {"id": "booster_2x", "chance": 0.15},
-        {"id": "crown", "chance": 0.03}
+        {
+          "id": "energy_drink",
+          "chance": 0.5
+        },
+        {
+          "id": "trophy",
+          "chance": 0.25
+        },
+        {
+          "id": "booster_2x",
+          "chance": 0.15
+        },
+        {
+          "id": "crown",
+          "chance": 0.03
+        }
       ]
     }
   },
@@ -157,8 +201,7 @@
     "sell_price": 60,
     "category": "collectible",
     "limited": true,
-    "rarity": "common",
-    "emoji": "🌹"
+    "rarity": "common"
   },
   {
     "id": "boombox",
@@ -167,8 +210,7 @@
     "price": 1000,
     "sell_price": 400,
     "category": "collectible",
-    "rarity": "common",
-    "emoji": "📻"
+    "rarity": "common"
   },
   {
     "id": "medal",
@@ -177,8 +219,7 @@
     "price": 2000,
     "sell_price": 800,
     "category": "collectible",
-    "rarity": "uncommon",
-    "emoji": "🎖️"
+    "rarity": "uncommon"
   },
   {
     "id": "ring",
@@ -187,8 +228,7 @@
     "price": 8000,
     "sell_price": 3500,
     "category": "collectible",
-    "rarity": "rare",
-    "emoji": "💍"
+    "rarity": "rare"
   },
   {
     "id": "gem",
@@ -197,8 +237,7 @@
     "price": 10000,
     "sell_price": 4500,
     "category": "collectible",
-    "rarity": "rare",
-    "emoji": "💎"
+    "rarity": "rare"
   },
   {
     "id": "watch",
@@ -207,8 +246,7 @@
     "price": 12000,
     "sell_price": 5000,
     "category": "collectible",
-    "rarity": "epic",
-    "emoji": "⌚"
+    "rarity": "epic"
   },
   {
     "id": "trophy",
@@ -217,8 +255,7 @@
     "price": 15000,
     "sell_price": 6500,
     "category": "collectible",
-    "rarity": "epic",
-    "emoji": "🏆"
+    "rarity": "epic"
   },
   {
     "id": "crown",
@@ -228,8 +265,7 @@
     "sell_price": 20000,
     "category": "collectible",
     "limited": true,
-    "rarity": "legendary",
-    "emoji": "👑"
+    "rarity": "legendary"
   },
   {
     "id": "golden_egg",
@@ -238,7 +274,6 @@
     "price": 5000,
     "sell_price": 4000,
     "category": "collectible",
-    "rarity": "epic",
-    "emoji": "🥚"
+    "rarity": "epic"
   }
 ]

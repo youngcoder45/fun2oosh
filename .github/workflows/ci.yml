@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: mypy typecheck
+        run: mypy .
+
+      - name: Compile check
+        run: python -m compileall -q bot.py config.py cogs models services utils
+
+      - name: Boot smoke test
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///ci_smoke.db
+        run: |
+          python - <<'EOF'
+          import asyncio
+
+          from bot import CORE_COGS, Fun2OoshBot
+          from models import Base
+          from services.items import ItemService
+          from utils.config import Config
+          from utils.migrations import run_migrations
+
+          async def main() -> None:
+              bot = Fun2OoshBot(Config())
+              async with bot.engine.begin() as conn:
+                  await conn.run_sync(Base.metadata.create_all)
+              await run_migrations(bot.engine)
+              async with bot.session_factory() as session:
+                  await ItemService.seed(session)
+              for cog in CORE_COGS:
+                  await bot.load_extension(cog)
+              required = {
+                  "balance", "work", "daily", "shop", "buy", "use", "trade",
+                  "hunt", "fish", "mine", "networth", "achievements",
+                  "blackjack", "slots", "roulette", "econfig", "audit", "prestige",
+              }
+              names = {c.name for c in bot.commands}
+              missing = required - names
+              assert not missing, f"missing commands: {sorted(missing)}"
+              print(f"cogs: {sorted(bot.cogs.keys())}")
+              print(f"commands: {len(bot.commands)}")
+              await bot.engine.dispose()
+
+          asyncio.run(main())
+          EOF

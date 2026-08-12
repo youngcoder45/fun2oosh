@@ -12,7 +12,7 @@ from typing import Optional
 from sqlalchemy import BigInteger, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base
+from .base import Base, utcnow
 
 
 class InventoryItem(Base):
@@ -24,10 +24,10 @@ class InventoryItem(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     item_id: Mapped[str] = mapped_column(String(50), index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1)
-    durability: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # remaining uses (None = unlimited)
+    durability: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # remaining uses (None = unlimited)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    acquired_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    extra_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string for extra state
+    acquired_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    extra_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # JSON string for extra state
 
     def __repr__(self) -> str:
         return f"<InventoryItem(user_id={self.user_id}, item_id='{self.item_id}', qty={self.quantity})>"

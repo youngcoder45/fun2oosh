@@ -10,3 +10,4 @@ venv/
 
 # Databases (keep fun2oosh.db tracked if you want it committed)
 # *.db
+.ruff-cache/

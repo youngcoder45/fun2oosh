@@ -7,7 +7,7 @@ service or through `EconomyUtils` while holding the same locks.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,7 +110,7 @@ class EconomyService:
             sender.balance -= amount
             receiver.balance += received
 
-            tax_note = f" (incl. {int(tax_rate * 100)}% tax: {tax} coins)" if tax else ""
+            tax_note = f"(incl. {int(tax_rate * 100)}% tax: {tax} coins)" if tax else ""
             session.add(
                 Transaction(
                     user_id=sender_id,
@@ -146,7 +146,7 @@ class GuardService:
     def account_age_days(member) -> int:
         if member is None or member.created_at is None:
             return 999
-        return max(0, (datetime.utcnow() - member.created_at).days)
+        return max(0, (datetime.now(timezone.utc) - member.created_at).days)
 
     @staticmethod
     def check_user_allowed(member, guild_cfg: Optional[GuildConfig]) -> Optional[str]:
@@ -157,7 +157,7 @@ class GuardService:
             age = GuardService.account_age_days(member)
             if age < guild_cfg.min_account_age_days:
                 return (
-                    f"❌ Anti-alt protection: your Discord account is only "
+                    f"Anti-alt protection: your Discord account is only"
                     f"**{age} day(s)** old. Minimum required: "
                     f"**{guild_cfg.min_account_age_days} day(s)**."
                 )

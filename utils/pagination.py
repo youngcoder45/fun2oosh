@@ -34,18 +34,18 @@ class PaginationView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.owner_id is not None and interaction.user.id != self.owner_id:
             await interaction.response.send_message(
-                "❌ You can't interact with someone else's pagination.", ephemeral=True
+                "You can't interact with someone else's pagination.", ephemeral=True
             )
             return False
         return True
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary)
     async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = max(0, self.index - 1)
         self._update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.index], view=self)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
     async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = min(len(self.pages) - 1, self.index + 1)
         self._update_buttons()
@@ -53,5 +53,5 @@ class PaginationView(discord.ui.View):
 
     async def on_timeout(self) -> None:
         for item in self.children:
-            item.disabled = True
+            item.disabled = True  # type: ignore[attr-defined]
         # Editing here is best-effort; the message may already be gone.

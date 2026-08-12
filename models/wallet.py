@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import BigInteger, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base
+from .base import Base, utcnow
 
 
 class Wallet(Base):
@@ -16,15 +16,15 @@ class Wallet(Base):
 
     __tablename__ = 'wallets'
 
-    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)  # Foreign key to User.id
-    balance: Mapped[int] = mapped_column(Integer, default=0)  # Wallet balance
-    bank: Mapped[int] = mapped_column(Integer, default=0)  # Bank balance
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # Foreign key to User.id
+    balance: Mapped[int] = mapped_column(Integer, default=0) # Wallet balance
+    bank: Mapped[int] = mapped_column(Integer, default=0) # Bank balance
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Limits and tracking
     daily_wagered: Mapped[int] = mapped_column(Integer, default=0)
-    last_daily_reset: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_daily_reset: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Progression (added via migration on existing databases)
     prestige: Mapped[int] = mapped_column(Integer, default=0)

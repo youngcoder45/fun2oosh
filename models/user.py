@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import BigInteger, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base
+from .base import Base, utcnow
 
 
 class User(Base):
@@ -16,12 +16,12 @@ class User(Base):
 
     __tablename__ = 'users'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)  # Discord user ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # Discord user ID
     username: Mapped[str] = mapped_column(String(32), nullable=False)
-    discriminator: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)  # For legacy usernames
+    discriminator: Mapped[Optional[str]] = mapped_column(String(4), nullable=True) # For legacy usernames
     avatar_hash: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Responsible gaming
     age_verified: Mapped[bool] = mapped_column(default=False)
@@ -29,7 +29,7 @@ class User(Base):
     ban_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Activity tracking
-    last_active: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_active: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     total_wagered: Mapped[int] = mapped_column(default=0)
     total_won: Mapped[int] = mapped_column(default=0)
     total_lost: Mapped[int] = mapped_column(default=0)

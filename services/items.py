@@ -9,14 +9,14 @@ import json
 import logging
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import InventoryItem, Item
+from models import InventoryItem, Item, utcnow
 from utils.economy_utils import EconomyUtils
 
 from .locks import lock_manager
@@ -92,7 +92,7 @@ class ItemService:
                     consumable=row.get("consumable", False),
                     limited=row.get("limited", False),
                     rarity=row.get("rarity", "common"),
-                    emoji=row.get("emoji", "📦"),  # ???
+                    emoji=row.get("emoji", ""), # ???
                     max_stack=row.get("max_stack", 99),
                     expires_in=row.get("expires_in"),
                     effects=json.dumps(row["effects"]) if row.get("effects") else None,
@@ -114,7 +114,7 @@ class ItemService:
     ) -> List[Item]:
         stmt = select(Item).order_by(Item.category, Item.price)
         if not include_limited:
-            stmt = stmt.where(Item.limited == False)  # noqa: E712
+            stmt = stmt.where(Item.limited == False) # noqa: E712
         return list((await session.execute(stmt)).scalars())
 
     # ----------------------------------------------------------------- inventory
@@ -162,7 +162,7 @@ class ItemService:
         inv = await ItemService._get_inv(session, user_id, item.id)
         expires_at = None
         if item.expires_in:
-            expires_at = datetime.utcnow() + timedelta(seconds=item.expires_in)
+            expires_at = utcnow() + timedelta(seconds=item.expires_in)
         if inv is not None and item.stackable:
             inv.quantity += qty
             if expires_at:
@@ -265,7 +265,7 @@ class ItemService:
         Returns ``(success, message)``. Runs entirely under the user lock.
         """
         if not item.consumable:
-            return False, "❌ That item can't be used."
+            return False, "That item can't be used."
 
         effects = {}
         if item.effects:
@@ -277,7 +277,7 @@ class ItemService:
         async with lock_manager.for_user(user_id):
             inv = await ItemService._get_inv(session, user_id, item.id)
             if inv is None or inv.quantity < 1:
-                return False, "❌ You don't have that item."
+                return False, "You don't have that item."
 
             # --- apply effects -------------------------------------------
             if "money_min" in effects:
@@ -285,7 +285,7 @@ class ItemService:
                 await EconomyUtils.add_money(
                     session, user_id, amount, "item", f"Used {item.name}"
                 )
-                msg = f"You used {item.emoji} **{item.name}** and got **{amount:,} coins**!"
+                msg = f"You used **{item.name}** and got **{amount:,} coins**!"
 
             elif "booster" in effects:
                 booster = effects["booster"]
@@ -301,7 +301,7 @@ class ItemService:
                 msg = await ItemService._open_crate_raw(session, user_id, item, effects)
 
             else:
-                return False, "❌ This item has no usable effect."
+                return False, "This item has no usable effect."
 
             inv.quantity -= 1
             if inv.quantity <= 0:
@@ -331,10 +331,10 @@ class ItemService:
                 if reward_item:
                     qty = slot.get("qty", 1)
                     await ItemService._grant_raw(session, user_id, reward_item, qty)
-                    lines.append(f"{reward_item.emoji} **{reward_item.name}** x{qty}")
+                    lines.append(f"**{reward_item.name}** x{qty}")
 
         if not lines:
             lines.append("...empty! Better luck next time.")
-        return f"You opened {item.emoji} **{item.name}**!\n" + "\n".join(
+        return f"You opened **{item.name}**!\n" + "\n".join(
             f"• {line}" for line in lines
         )

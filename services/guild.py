@@ -15,17 +15,17 @@ logger = logging.getLogger(__name__)
 
 # key -> (python_type, min, max, friendly label)
 SETTINGS: dict = {
-    'work_reward':           ('int', 1, 1_000_000, 'work reward'),
-    'daily_reward':          ('int', 1, 10_000_000, 'daily reward'),
-    'weekly_reward':         ('int', 1, 50_000_000, 'weekly reward'),
-    'monthly_reward':        ('int', 1, 200_000_000, 'monthly reward'),
-    'tax_rate':              ('float', 0, 0.5, 'transfer tax rate'),
-    'min_bet':               ('int', 1, 1_000_000_000, 'minimum bet'),
-    'max_bet':               ('int', 1, 1_000_000_000, 'maximum bet'),
-    'daily_wager_limit':     ('int', 1, 1_000_000_000, 'daily wager limit'),
-    'passive_income':        ('int', 0, 1_000_000, 'hourly passive income'),
-    'anti_alt':              ('bool', None, None, 'anti-alt protection'),
-    'min_account_age_days':  ('int', 0, 365, 'minimum account age (days)'),
+    'work_reward': ('int', 1, 1_000_000, 'work reward'),
+    'daily_reward': ('int', 1, 10_000_000, 'daily reward'),
+    'weekly_reward': ('int', 1, 50_000_000, 'weekly reward'),
+    'monthly_reward': ('int', 1, 200_000_000, 'monthly reward'),
+    'tax_rate': ('float', 0, 0.5, 'transfer tax rate'),
+    'min_bet': ('int', 1, 1_000_000_000, 'minimum bet'),
+    'max_bet': ('int', 1, 1_000_000_000, 'maximum bet'),
+    'daily_wager_limit': ('int', 1, 1_000_000_000, 'daily wager limit'),
+    'passive_income': ('int', 0, 1_000_000, 'hourly passive income'),
+    'anti_alt': ('bool', None, None, 'anti-alt protection'),
+    'min_account_age_days': ('int', 0, 365, 'minimum account age (days)'),
 }
 
 
@@ -61,9 +61,10 @@ class GuildConfigService:
         if defaults is None:
             defaults = _Config()
         if key not in SETTINGS:
-            return False, f"❌ Unknown setting `{key}`. Available: {', '.join(sorted(SETTINGS))}"
+            return False, f"Unknown setting `{key}`. Available: {', '.join(sorted(SETTINGS))}"
         kind, lo, hi, label = SETTINGS[key]
 
+        value: int | float
         try:
             if kind == 'bool':
                 value = raw_value.strip().lower() in ('1', 'true', 'yes', 'on')
@@ -72,12 +73,12 @@ class GuildConfigService:
             else:
                 value = int(raw_value)
         except ValueError:
-            return False, f"❌ `{raw_value}` is not a valid {kind} value for `{key}`."
+            return False, f"`{raw_value}` is not a valid {kind} value for `{key}`."
 
         if lo is not None and value < lo:
-            return False, f"❌ `{key}` must be at least {lo}."
+            return False, f"`{key}` must be at least {lo}."
         if hi is not None and value > hi:
-            return False, f"❌ `{key}` must be at most {hi}."
+            return False, f"`{key}` must be at most {hi}."
 
         row = await GuildConfigService.get(session, guild_id)
         old = getattr(row, key, None)
@@ -88,15 +89,15 @@ class GuildConfigService:
             max_bet = row.max_bet if row.max_bet is not None else defaults.max_bet
             if value > max_bet:
                 setattr(row, key, old)
-                return False, f"❌ `min_bet` cannot exceed `max_bet` ({max_bet})."
+                return False, f"`min_bet` cannot exceed `max_bet` ({max_bet})."
         if key == 'max_bet':
             min_bet = row.min_bet if row.min_bet is not None else defaults.min_bet
             if value < min_bet:
                 setattr(row, key, old)
-                return False, f"❌ `max_bet` cannot be below `min_bet` ({min_bet})."
+                return False, f"`max_bet` cannot be below `min_bet` ({min_bet})."
 
         await session.commit()
-        return True, f"✅ Set **{label}** (`{key}`) to **{value}**."
+        return True, f"Set **{label}** (`{key}`) to **{value}**."
 
     @staticmethod
     def describe(row: GuildConfig, defaults: Config) -> str:
@@ -106,7 +107,7 @@ class GuildConfigService:
             _, _, _, label = SETTINGS[key]
             value = GuildConfigService.effective(row, defaults, key)
             if isinstance(value, bool):
-                value = "✅ on" if value else "❌ off"
+                value = "on" if value else "off"
             lines.append(f"• **{label.title()}** (`{key}`): `{value}`")
         return "\n".join(lines)
 

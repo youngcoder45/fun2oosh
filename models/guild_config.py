@@ -26,7 +26,7 @@ class GuildConfig(Base):
     monthly_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Economy rules
-    tax_rate: Mapped[float] = mapped_column(Float, default=0.0)        # 0.0 – 0.5 (applied to transfers)
+    tax_rate: Mapped[float] = mapped_column(Float, default=0.0) # 0.0 – 0.5 (applied to transfers)
     min_bet: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_bet: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     daily_wager_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

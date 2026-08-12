@@ -6,8 +6,6 @@ from typing import List, Optional, Tuple
 
 import discord
 
-COIN_EMOJI = "💎️"
-
 
 def format_coins(amount) -> str:
     """Format an amount of coins with thousands separators."""
@@ -69,21 +67,19 @@ class EmbedBuilder:
     def leaderboard_embed(
         leaderboard: List[Tuple[int, int]],
         title: str = "Leaderboard",
-        bot: Optional[object] = None,
+        bot: Optional[discord.Client] = None,
     ) -> discord.Embed:
         """Leaderboard embed from a list of (user_id, total) tuples."""
         embed = discord.Embed(
             title=title,
             color=discord.Color.gold(),
         )
-        medals = ["🥇", "🥈", "🥉"]
-
         if not leaderboard:
             embed.description = "No players found yet. Be the first to earn some coins!"
             return embed
 
         for idx, (user_id, total) in enumerate(leaderboard, start=1):
-            medal = medals[idx - 1] if idx <= 3 else f"#{idx}"
+            medal = f"#{idx}"
             name = f"User {user_id}"
             if bot is not None:
                 try:
