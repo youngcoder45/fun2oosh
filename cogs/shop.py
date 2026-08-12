@@ -5,20 +5,20 @@ Commands: shop, buy, sell, use, inventory, giveitem, trade, iteminfo.
 """
 
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from bot import Fun2OoshBot
-from models import Transaction
+from models import Item, Transaction
 from services.items import ItemService
 from services.locks import lock_manager
 from services.progression import AchievementService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
 from utils.pagination import PaginationView
 
 RARITY_COLORS = {
@@ -30,8 +30,71 @@ RARITY_COLORS = {
 }
 
 
+class ShopView(discord.ui.View):
+    """Shop browsing: category dropdown + page navigation (Components V2)."""
+
+    def __init__(
+        self,
+        pages: Dict[str, List[discord.Embed]],
+        owner_id: int,
+        categories: List[str],
+    ):
+        super().__init__(timeout=180)
+        self.pages = pages
+        self.owner_id = owner_id
+        self.categories = categories
+        self.category = "all"
+        self.index = 0
+
+        options = [discord.SelectOption(label="All", value="all")] + [
+            discord.SelectOption(label=cat.title(), value=cat) for cat in categories
+        ]
+        self.category_select: discord.ui.Select = discord.ui.Select(
+            placeholder="Filter by category",
+            options=options,
+            row=0,
+        )
+        self.category_select.callback = self._on_category  # type: ignore[method-assign]
+        self.add_item(self.category_select)
+        self._update()
+
+    def _current(self) -> List[discord.Embed]:
+        return self.pages[self.category]
+
+    def _update(self) -> None:
+        pages = self._current()
+        self.prev_button.disabled = self.index <= 0
+        self.next_button.disabled = self.index >= len(pages) - 1
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message(
+                "You can't interact with someone else's shop.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def _on_category(self, interaction: discord.Interaction) -> None:
+        self.category = self.category_select.values[0]
+        self.index = 0
+        self._update()
+        await interaction.response.edit_message(embed=self._current()[0], view=self)
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, row=1)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index = max(0, self.index - 1)
+        self._update()
+        await interaction.response.edit_message(embed=self._current()[self.index], view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary, row=1)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index = min(len(self._current()) - 1, self.index + 1)
+        self._update()
+        await interaction.response.edit_message(embed=self._current()[self.index], view=self)
+
+
 class TradeOffer:
-    __slots__ = ("initiator", "partner", "item_id", "qty", "at")
+    __slots__ = ("initiator", "partner", "item_id", "qty", "at", "message", "view")
 
     def __init__(self, initiator: int, partner: int, item_id: str, qty: int):
         self.initiator = initiator
@@ -39,6 +102,98 @@ class TradeOffer:
         self.item_id = item_id
         self.qty = qty
         self.at = time.monotonic()
+        self.message: Optional[discord.Message] = None
+        self.view: Optional[TradeOfferView] = None
+
+
+class TradeOfferView(discord.ui.View):
+    """Trade offer embed: Accept/Decline for the partner, Cancel for the sender."""
+
+    def __init__(self, cog: "Shop", offer: TradeOffer):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.offer = offer
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id not in (self.offer.initiator, self.offer.partner):
+            await interaction.response.send_message(
+                "This trade is not for you.", ephemeral=True
+            )
+            return False
+        return True
+
+    def disable_all(self) -> None:
+        for child in self.children:
+            child.disabled = True  # type: ignore[attr-defined]
+
+    async def on_timeout(self) -> None:
+        """Expire the offer: remove it and detach the buttons."""
+        if self.offer in self.cog.trades:
+            self.cog.trades.remove(self.offer)
+        self.disable_all()
+        if self.offer.message is not None and self.offer.message.embeds:
+            embed = self.offer.message.embeds[0].copy()
+            embed.description = f"{embed.description or ''}\n\n*Trade offer expired.*"
+            try:
+                await self.offer.message.edit(embed=embed, view=None)
+            except discord.HTTPException:
+                pass
+
+    async def _resolve(self) -> bool:
+        """True while the offer is still pending."""
+        return self.offer in self.cog.trades
+
+    async def _close(self, interaction: discord.Interaction, note: str) -> None:
+        """Retract the offer, disable the buttons, and annotate the embed."""
+        if self.offer in self.cog.trades:
+            self.cog.trades.remove(self.offer)
+        self.disable_all()
+        embed = None
+        if interaction.message is not None and interaction.message.embeds:
+            embed = interaction.message.embeds[0].copy()
+            embed.description = f"{embed.description or ''}\n\n*{note}*"
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.offer.partner:
+            return await interaction.response.send_message(
+                "Only the offer recipient can accept.", ephemeral=True
+            )
+        if not await self._resolve():
+            return await interaction.response.send_message(
+                "This offer has expired.", ephemeral=True
+            )
+        await self._close(
+            interaction,
+            f"{interaction.user.mention} accepted. Send your item with "
+            f"`!trade <@{self.offer.initiator}> <item> <qty>` to complete the exchange.",
+        )
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    async def decline_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.offer.partner:
+            return await interaction.response.send_message(
+                "Only the offer recipient can decline.", ephemeral=True
+            )
+        if not await self._resolve():
+            return await interaction.response.send_message(
+                "This offer has expired.", ephemeral=True
+            )
+        await self._close(interaction, f"{interaction.user.mention} declined the trade offer.")
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.offer.initiator:
+            return await interaction.response.send_message(
+                "Only the offer sender can cancel.", ephemeral=True
+            )
+        if not await self._resolve():
+            return await interaction.response.send_message(
+                "This offer has expired.", ephemeral=True
+            )
+        await self._close(interaction, "Trade offer cancelled.")
 
 
 class Shop(commands.Cog):
@@ -55,27 +210,20 @@ class Shop(commands.Cog):
         embed = discord.Embed(
             title=item.name,
             description=item.description or "*No description.*",
-            color=RARITY_COLORS.get(item.rarity, 0x2F3136),
+            color=RARITY_COLORS.get(item.rarity, COLOR_INFO),
         )
         embed.add_field(name="Category", value=item.category.title(), inline=True)
         embed.add_field(name="Rarity", value=item.rarity.title(), inline=True)
         embed.add_field(name="Price", value=format_coins(item.price), inline=True)
         embed.add_field(name="Sell Price", value=format_coins(item.sell_price), inline=True)
-        embed.add_field(name="Stackable", value="" if item.stackable else "", inline=True)
-        embed.add_field(name="Usable", value="" if item.consumable else "", inline=True)
+        embed.add_field(name="Stackable", value="Yes" if item.stackable else "No", inline=True)
+        embed.add_field(name="Usable", value="Yes" if item.consumable else "No", inline=True)
         embed.set_footer(text=f"Item ID: {item.id} • Buy with: !buy {item.id} [qty]")
         return embed
 
-    async def _shop_pages(self, session, category: Optional[str]) -> List[discord.Embed]:
-        items = await ItemService.get_all(session, include_limited=False)
-        if category and category != "all":
-            items = [i for i in items if i.category == category]
-
+    def _shop_pages(self, items: List[Item], category: str = "all") -> List[discord.Embed]:
         if not items:
-            embed = discord.Embed(
-                title="Shop", description="No items available in this category.", color=0x2F3136
-            )
-            return [embed]
+            return [EmbedBuilder.info_embed("Shop", "No items available in this category.")]
 
         pages: List[discord.Embed] = []
         per_page = 8
@@ -83,8 +231,8 @@ class Shop(commands.Cog):
             chunk = items[start:start + per_page]
             embed = discord.Embed(
                 title="Shop Catalog",
-                description=f"Category: **{category or 'all'}** • `!buy <id> [qty]`",
-                color=0x2F3136,
+                description=f"Category: **{category.title()}** • `!buy <id> [qty]`",
+                color=COLOR_INFO,
             )
             for item in chunk:
                 embed.add_field(
@@ -103,10 +251,20 @@ class Shop(commands.Cog):
     async def shop(self, ctx: commands.Context, category: Optional[str] = None):
         """Browse the item shop."""
         async with self.bot.get_session() as session:
-            pages = await self._shop_pages(session, category)
+            items = await ItemService.get_all(session, include_limited=False)
+        categories = sorted({item.category for item in items})
+        pages: Dict[str, List[discord.Embed]] = {"all": self._shop_pages(items)}
+        for cat in categories:
+            pages[cat] = self._shop_pages(
+                [item for item in items if item.category == cat], cat
+            )
 
-        view = PaginationView(pages, owner_id=ctx.author.id)
-        await ctx.send(embed=pages[0], view=view)
+        view = ShopView(pages, owner_id=ctx.author.id, categories=categories)
+        if category and category.lower() in pages:
+            view.category = category.lower()
+            view.index = 0
+            view._update()
+        await ctx.send(embed=view._current()[0], view=view)
 
     @commands.hybrid_command(name="iteminfo", aliases=["item"], description="View item details")
     @app_commands.describe(item_id="The item ID to inspect")
@@ -230,10 +388,9 @@ class Shop(commands.Cog):
             rows = await ItemService.list_inventory(session, target.id)
 
         if not rows:
-            embed = discord.Embed(
-                title=f"{target.display_name}'s Inventory",
-                description="Empty! Buy items with `!shop` / `!buy`.",
-                color=0x2F3136,
+            embed = EmbedBuilder.info_embed(
+                f"{target.display_name}'s Inventory",
+                "Empty! Buy items with `!shop` / `!buy`.",
             )
             return await ctx.send(embed=embed)
 
@@ -242,7 +399,7 @@ class Shop(commands.Cog):
         for start in range(0, len(rows), per_page):
             embed = discord.Embed(
                 title=f"{target.display_name}'s Inventory",
-                color=0x2F3136,
+                color=COLOR_INFO,
             )
             for inv, item in rows[start:start + per_page]:
                 embed.add_field(
@@ -350,6 +507,10 @@ class Shop(commands.Cog):
                     await session.commit()
 
                 self.trades.remove(pending)
+                if pending.view is not None:
+                    pending.view.disable_all()
+                if pending.message is not None:
+                    await pending.message.edit(view=None)
                 embed = EmbedBuilder.success_embed(
                     "Trade Complete!",
                     f"You gave **{item.name}** x{qty} to {user.mention} "
@@ -357,15 +518,18 @@ class Shop(commands.Cog):
                 )
                 return await ctx.send(embed=embed)
 
-            # Register a new offer
-            self.trades.append(TradeOffer(ctx.author.id, user.id, item.id, qty))
-            await ctx.send(
-                f"**Trade offer sent!** You offered **{item.name}** x{qty} "
-                f"to {user.mention}.\n"
-                f"To accept, {user.display_name} should run:\n"
-                f"`{ctx.prefix}trade {ctx.author.mention} <their-item> <qty>`\n"
-                f"(offer expires in 60 seconds)"
+            # Register a new offer with interactive buttons
+            offer = TradeOffer(ctx.author.id, user.id, item.id, qty)
+            self.trades.append(offer)
+            embed = EmbedBuilder.info_embed(
+                "Trade Offer",
+                f"**{ctx.author.display_name}** offers **{item.name}** x{qty} to {user.mention}.",
             )
+            embed.set_footer(text="Offer expires in 60 seconds")
+            view = TradeOfferView(self, offer)
+            message = await ctx.send(embed=embed, view=view)
+            offer.message = message
+            offer.view = view
 
     # --------------------------------------------------------------- helpers
 

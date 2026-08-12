@@ -2,7 +2,7 @@
 Economy cog for wallet management and basic income commands.
 """
 
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import discord
 from discord import app_commands
@@ -16,11 +16,12 @@ from services.guild import GuildConfigService
 from services.items import ItemService
 from services.locks import lock_manager
 from services.progression import ACHIEVEMENTS, AchievementService, ProgressionService
+from services.role_income import RoleIncomeService
 from utils.anti_fraud import anti_fraud
 from utils.config import Config
-from utils.cooldowns import check_cooldown
+from utils.cooldowns import check_cooldown, cooldown_manager
 from utils.economy_utils import EconomyUtils
-from utils.helpers import EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, COLOR_SUCCESS, EmbedBuilder, format_coins, format_duration
 from utils.pagination import PaginationView
 
 
@@ -110,45 +111,65 @@ class Economy(commands.Cog):
         await self._announce_achievements(ctx=interaction, new=new)
 
     @commands.command(name='collect', aliases=['hourly'])
-    @check_cooldown('collect', 3600) # 1 hour
     async def collect(self, ctx: commands.Context):
-        """Collect hourly reward."""
-        reward = 50 # Fixed for now
+        """Collect your hourly passive income. Pays your highest income role."""
+        async with self.bot.get_session() as session:
+            base, source = await self._collect_payout(session, ctx.author)
+
+        if base <= 0:
+            return await ctx.send(
+                "No passive income is configured for you in this server yet."
+            )
+
+        cooldown = self.config.collect_cooldown
+        if cooldown_manager.is_on_cooldown('collect', ctx.author.id, cooldown):
+            remaining = cooldown_manager.get_remaining_time('collect', ctx.author.id, cooldown)
+            return await ctx.send(f"You can collect again in **{format_duration(remaining)}**.")
+        cooldown_manager.set_cooldown('collect', ctx.author.id)
 
         async with self.bot.get_session() as session:
             final = await EconomyService.reward(
-                session, ctx.author.id, reward, 'collect', 'Hourly collect reward'
+                session, ctx.author.id, base, 'collect', 'Hourly passive income'
             )
+            wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
 
-        if final > 0:
-            embed = EmbedBuilder.success_embed(
-                "Collection Complete!",
-                f"You collected {format_coins(final)}!"
-            )
-            await ctx.send(embed=embed)
-        else:
-            await ctx.send("An error occurred while processing your collection.")
+        remaining = cooldown_manager.get_remaining_time('collect', ctx.author.id, cooldown)
+        embed = self._collect_embed(source, final, wallet.balance or 0, remaining)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name='collect', description='Collect hourly reward')
-    @app_commands.checks.cooldown(1, 3600, key=lambda i: (i.guild_id, i.user.id))
+    @app_commands.command(name='collect', description='Collect your hourly passive income')
     async def collect_slash(self, interaction: discord.Interaction):
         """Slash command for collect."""
-        reward = 50 # Fixed for now
-
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, interaction.user.id, reward, 'collect', 'Hourly collect reward'
+            base, source = await self._collect_payout(session, interaction.user)
+
+        if base <= 0:
+            return await interaction.response.send_message(
+                "No passive income is configured for you in this server yet.",
+                ephemeral=True,
             )
 
-            if success:
-                await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Collection Complete!",
-                    f"You collected {format_coins(reward)}!"
-                )
-                await interaction.response.send_message(embed=embed)
-            else:
-                await interaction.response.send_message("An error occurred while processing your collection.")
+        cooldown = self.config.collect_cooldown
+        if cooldown_manager.is_on_cooldown('collect', interaction.user.id, cooldown):
+            remaining = cooldown_manager.get_remaining_time(
+                'collect', interaction.user.id, cooldown
+            )
+            return await interaction.response.send_message(
+                f"You can collect again in **{format_duration(remaining)}**.", ephemeral=True
+            )
+        cooldown_manager.set_cooldown('collect', interaction.user.id)
+
+        async with self.bot.get_session() as session:
+            final = await EconomyService.reward(
+                session, interaction.user.id, base, 'collect', 'Hourly passive income'
+            )
+            wallet = await EconomyUtils.get_or_create_wallet(session, interaction.user.id)
+
+        remaining = cooldown_manager.get_remaining_time(
+            'collect', interaction.user.id, cooldown
+        )
+        embed = self._collect_embed(source, final, wallet.balance or 0, remaining)
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name='daily', aliases=['d'])
     async def daily(self, ctx: commands.Context):
@@ -505,33 +526,47 @@ class Economy(commands.Cog):
         else:
             await interaction.response.send_message("Transfer failed. Check your balance and try again.")
 
-    @commands.command(name='leaderboard', aliases=['lb', 'top'])
-    async def leaderboard(self, ctx: commands.Context):
-        """Show the top 10 richest users."""
+    async def _leaderboard_pages(self, limit: int = 25) -> List[discord.Embed]:
+        """Build paginated leaderboard pages from the wallet totals."""
         async with self.bot.get_session() as session:
             stmt = select(
                 Wallet.user_id,
                 (Wallet.balance + Wallet.bank).label('total')
-            ).order_by(desc('total')).limit(10)
-            result = await session.execute(stmt)
-            leaderboard = [(row.user_id, row.total) for row in result.all()]
+            ).order_by(desc('total')).limit(limit)
+            rows = [(row.user_id, row.total) for row in (await session.execute(stmt)).all()]
 
-        embed = EmbedBuilder.leaderboard_embed(leaderboard, "Richest Players")
-        await ctx.send(embed=embed)
+        pages = []
+        per_page = 10
+        for start in range(0, len(rows), per_page):
+            chunk = rows[start:start + per_page]
+            embed = EmbedBuilder.leaderboard_embed(
+                chunk, "Richest Players", bot=self.bot, start_rank=start + 1
+            )
+            embed.set_footer(
+                text=f"Page {start // per_page + 1}/{(len(rows) - 1) // per_page + 1}"
+            )
+            pages.append(embed)
+        return pages
+
+    @commands.command(name='leaderboard', aliases=['lb', 'top'])
+    async def leaderboard(self, ctx: commands.Context):
+        """Show the richest users (paginated)."""
+        pages = await self._leaderboard_pages()
+        if not pages:
+            return await ctx.send("No players found yet. Be the first to earn some coins!")
+        view = PaginationView(pages, owner_id=ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
 
     @app_commands.command(name='leaderboard', description='Show the leaderboard')
     async def leaderboard_slash(self, interaction: discord.Interaction):
         """Slash command for leaderboard."""
-        async with self.bot.get_session() as session:
-            stmt = select(
-                Wallet.user_id,
-                (Wallet.balance + Wallet.bank).label('total')
-            ).order_by(desc('total')).limit(10)
-            result = await session.execute(stmt)
-            leaderboard = [(row.user_id, row.total) for row in result.all()]
-
-        embed = EmbedBuilder.leaderboard_embed(leaderboard, "Richest Players")
-        await interaction.response.send_message(embed=embed)
+        pages = await self._leaderboard_pages()
+        if not pages:
+            return await interaction.response.send_message(
+                "No players found yet. Be the first to earn some coins!"
+            )
+        view = PaginationView(pages, owner_id=interaction.user.id)
+        await interaction.response.send_message(embed=pages[0], view=view)
 
     @commands.command(name='beg', aliases=['b'])
     @check_cooldown('beg', 60) # 1 minute
@@ -567,11 +602,7 @@ class Economy(commands.Cog):
                 "The streets are empty...",
                 "Someone told you to get a job!"
             ]
-            embed = discord.Embed(
-                title="No Luck",
-                description=random.choice(responses),
-                color=discord.Color.red()
-            )
+            embed = EmbedBuilder.error_embed("No Luck", random.choice(responses))
             await ctx.send(embed=embed)
 
     @commands.command(name='crime', aliases=['c'])
@@ -624,10 +655,9 @@ class Economy(commands.Cog):
                 else:
                     loss_msg = "You were caught but had no money to pay the fine!"
 
-            embed = discord.Embed(
-                title="Caught!",
-                description=f"You tried to {crime_desc} but got caught!\n{loss_msg}",
-                color=discord.Color.red()
+            embed = EmbedBuilder.error_embed(
+                "Caught!",
+                f"You tried to {crime_desc} but got caught!\n{loss_msg}",
             )
             await ctx.send(embed=embed)
 
@@ -699,11 +729,10 @@ class Economy(commands.Cog):
                 )
                 await session.commit()
 
-                embed = discord.Embed(
-                    title="Robbery Failed!",
-                    description=f"You were caught trying to rob {user.mention}!\n"
-                               f"You lost {format_coins(fine)} and they got {format_coins(fine // 2)}!",
-                    color=discord.Color.red()
+                embed = EmbedBuilder.error_embed(
+                    "Robbery Failed!",
+                    f"You were caught trying to rob {user.mention}!\n"
+                    f"You lost {format_coins(fine)} and they got {format_coins(fine // 2)}!",
                 )
                 await ctx.send(embed=embed)
 
@@ -750,41 +779,22 @@ class Economy(commands.Cog):
                 )
                 await session.commit()
 
-                embed = discord.Embed(
-                    title="GAMBLE",
-                    description="━━━━━━━━━━━━━━━━━━━━━━",
-                    color=discord.Color.green()
-                )
-                embed.add_field(
-                    name="OUTCOME",
-                    value=f"```diff\n+ WIN\n```\n**Payout:** {format_coins(payout)}\n**Profit:** +{format_coins(amount)}",
-                    inline=False
-                )
-                embed.add_field(
-                    name="BALANCE",
-                    value=f"```\n{wallet.balance:,} coins\n```",
-                    inline=False
+                embed = EmbedBuilder.success_embed(
+                    "Gamble Result",
+                    f"You won **{format_coins(payout)}** "
+                    f"(profit **+{format_coins(amount)}**).",
                 )
             else:
                 await session.commit()
 
-                embed = discord.Embed(
-                    title="GAMBLE",
-                    description="━━━━━━━━━━━━━━━━━━━━━━",
-                    color=discord.Color.red()
-                )
-                embed.add_field(
-                    name="OUTCOME",
-                    value=f"```diff\n- LOSS\n```\n**Lost:** {format_coins(amount)}",
-                    inline=False
-                )
-                embed.add_field(
-                    name="BALANCE",
-                    value=f"```\n{wallet.balance:,} coins\n```",
-                    inline=False
+                embed = EmbedBuilder.error_embed(
+                    "Gamble Result",
+                    f"You lost **{format_coins(amount)}**.",
                 )
 
-            embed.set_footer(text="Economy • Quick Gamble")
+            embed.add_field(
+                name="Balance", value=f"**{wallet.balance or 0:,}** coins", inline=False
+            )
             await ctx.send(embed=embed)
 
         async with self.bot.get_session() as session:
@@ -793,43 +803,43 @@ class Economy(commands.Cog):
 
     @commands.command(name='richest', aliases=['top10', 'baltop'])
     async def richest(self, ctx: commands.Context):
-        """Show the top 15 richest users with detailed stats."""
+        """Show the richest users with wallet breakdown (paginated)."""
         async with self.bot.get_session() as session:
             stmt = select(
                 Wallet.user_id,
                 Wallet.balance,
                 Wallet.bank,
                 (Wallet.balance + Wallet.bank).label('total')
-            ).order_by(desc('total')).limit(15)
-            result = await session.execute(stmt)
-            users = result.all()
+            ).order_by(desc('total')).limit(25)
+            users = (await session.execute(stmt)).all()
 
         if not users:
             return await ctx.send("No users found in the economy!")
 
-        embed = discord.Embed(
-            title="TOP 15 RICHEST PLAYERS",
-            description="━━━━━━━━━━━━━━━━━━━━━━",
-            color=discord.Color.gold()
-        )
-
-        for idx, user_data in enumerate(users, 1):
-            try:
-                user = await self.bot.fetch_user(user_data.user_id)
-                name = user.display_name
-            except discord.HTTPException:
-                name = f"User {user_data.user_id}"
-
-            medal = f"#{idx}"
-
-            embed.add_field(
-                name=f"{medal} {name}",
-                value=f"```\nTotal: {user_data.total:,}\nWallet: {user_data.balance:,}\nBank: {user_data.bank:,}\n```",
-                inline=True
+        pages = []
+        per_page = 10
+        for start in range(0, len(users), per_page):
+            embed = discord.Embed(title="Richest Players", color=COLOR_INFO)
+            for idx, user_data in enumerate(users[start:start + per_page], start=start + 1):
+                user = self.bot.get_user(user_data.user_id)
+                name = user.display_name if user is not None else f"User {user_data.user_id}"
+                embed.add_field(
+                    name=f"#{idx} {name}",
+                    value=(
+                        f"Total: **{user_data.total:,}** coins\n"
+                        f"Wallet: {user_data.balance:,} • Bank: {user_data.bank:,}"
+                    ),
+                    inline=True,
+                )
+                if idx % 2 == 0:
+                    embed.add_field(name="\u200b", value="\u200b", inline=False)
+            embed.set_footer(
+                text=f"Page {start // per_page + 1}/{(len(users) - 1) // per_page + 1}"
             )
+            pages.append(embed)
 
-        embed.set_footer(text="Economy • Leaderboard")
-        await ctx.send(embed=embed)
+        view = PaginationView(pages, owner_id=ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
 
     @commands.command(name='give', aliases=['gift'])
     async def give(self, ctx: commands.Context, user: discord.User, amount: int):
@@ -899,10 +909,9 @@ class Economy(commands.Cog):
                 f"You searched the **{location}** and found {format_coins(reward)}!"
             )
         else:
-            embed = discord.Embed(
-                title="Nothing Found",
-                description=f"You searched the **{location}** but found nothing...",
-                color=discord.Color.orange()
+            embed = EmbedBuilder.warning_embed(
+                "Nothing Found",
+                f"You searched the **{location}** but found nothing...",
             )
 
         async with self.bot.get_session() as session:
@@ -942,31 +951,40 @@ class Economy(commands.Cog):
 
         embed = discord.Embed(
             title=f"{target.display_name}'s Profile",
-            description="━━━━━━━━━━━━━━━━━━━━━━",
-            color=discord.Color.blue()
+            color=COLOR_INFO,
         )
-
         embed.set_thumbnail(url=target.display_avatar.url)
 
         embed.add_field(
-            name="WEALTH",
-            value=f"```\nTotal: {total_wealth:,}\nWallet: {wallet.balance:,}\nBank: {wallet.bank:,}\n```",
-            inline=False
+            name="Wealth",
+            value=(
+                f"**Total:** {total_wealth:,} coins\n"
+                f"**Wallet:** {wallet.balance:,}\n"
+                f"**Bank:** {wallet.bank:,}"
+            ),
+            inline=False,
         )
 
         embed.add_field(
-            name="STATISTICS",
-            value=f"```\nTransactions: {tx_count}\nTotal Earned: {total_earned:,}\nInventory: {inv_count} items\n```",
-            inline=False
+            name="Statistics",
+            value=(
+                f"**Transactions:** {tx_count}\n"
+                f"**Total Earned:** {total_earned:,} coins\n"
+                f"**Inventory:** {inv_count} items"
+            ),
+            inline=False,
         )
 
         embed.add_field(
-            name="PROGRESSION",
-            value=f"```\nPrestige: {wallet.prestige or 0}\nReputation: {wallet.reputation or 0}\nDaily Streak: {wallet.daily_streak or 0}\nAchievements: {achievement_count}/{len(ACHIEVEMENTS)}\n```",
-            inline=False
+            name="Progression",
+            value=(
+                f"**Prestige:** {wallet.prestige or 0}\n"
+                f"**Reputation:** {wallet.reputation or 0}\n"
+                f"**Daily Streak:** {wallet.daily_streak or 0}\n"
+                f"**Achievements:** {achievement_count}/{len(ACHIEVEMENTS)}"
+            ),
+            inline=False,
         )
-
-        embed.set_footer(text=f"Economy • User ID: {target.id}")
         await ctx.send(embed=embed)
 
     @commands.command(name='transactions', aliases=['history', 'tx', 'logs'])
@@ -991,7 +1009,7 @@ class Economy(commands.Cog):
         for start in range(0, len(txs), per_page):
             embed = discord.Embed(
                 title=f"{target.display_name}'s Transactions",
-                color=discord.Color.dark_teal(),
+                color=COLOR_INFO,
             )
             for tx in txs[start:start + per_page]:
                 sign = "+" if tx.amount >= 0 else ""
@@ -1030,11 +1048,7 @@ class Economy(commands.Cog):
         lines = "\n".join(
             f"**{a['name']}** — {a['desc']}" for a in new
         )
-        embed = discord.Embed(
-            title="Achievements Unlocked!",
-            description=lines,
-            color=discord.Color.gold(),
-        )
+        embed = EmbedBuilder.gold_embed("Achievements Unlocked!", lines)
         send = getattr(ctx, "send", None)
         if send is not None:
             await send(embed=embed)
@@ -1043,6 +1057,37 @@ class Economy(commands.Cog):
                 await ctx.followup.send(embed=embed)
             except Exception:
                 await ctx.response.send_message(embed=embed)
+
+    async def _collect_payout(self, session, user) -> Tuple[int, str]:
+        """Resolve the collect payout: highest eligible role income, else base rate.
+
+        Returns ``(amount, source_label)``.
+        """
+        base = self.config.collect_reward
+        source = "Base rate"
+        guild = getattr(user, "guild", None)
+        if guild is not None:
+            guild_cfg = await GuildConfigService.get(session, guild.id)
+            base = GuildConfigService.effective(guild_cfg, self.config, 'collect_reward')
+            role_ids = [role.id for role in getattr(user, "roles", [])]
+            income = await RoleIncomeService.highest_for(session, guild.id, role_ids)
+            if income is not None:
+                base = income.hourly_rate
+                role = guild.get_role(income.role_id)
+                source = role.name if role is not None else f"Role {income.role_id}"
+        return base, source
+
+    @staticmethod
+    def _collect_embed(source: str, amount: int, balance: int, remaining: float) -> discord.Embed:
+        """Minimal passive-income embed: source, amount, balance, next claim."""
+        embed = discord.Embed(title="Passive Income", color=COLOR_SUCCESS)
+        embed.add_field(name="Income Source", value=source, inline=True)
+        embed.add_field(name="Amount Earned", value=f"**{amount:,}** coins", inline=True)
+        embed.add_field(name="Balance", value=f"**{balance:,}** coins", inline=True)
+        embed.add_field(
+            name="Next Claim", value=f"in {format_duration(remaining)}", inline=False
+        )
+        return embed
 
     async def _guard_error(self, ctx, session) -> Optional[str]:
         """Return a block message if anti-alt protection triggers, else None."""

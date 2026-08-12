@@ -27,6 +27,9 @@ COLUMN_MIGRATIONS: Dict[str, List[Tuple[str, str]]] = {
         ('last_monthly_at', 'DATETIME'),
         ('last_passive_at', 'DATETIME'),
     ],
+    'guild_config': [
+        ('collect_reward', 'INTEGER'),
+    ],
 }
 
 

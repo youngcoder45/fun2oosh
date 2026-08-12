@@ -29,6 +29,7 @@ from utils.anti_fraud import anti_fraud as anti_fraud_instance
 from utils.config import Config
 from utils.cooldowns import cooldown_manager
 from utils.economy_utils import EconomyUtils
+from utils.helpers import COLOR_INFO, responsible_gaming_notice
 
 
 class CardSuit(Enum):
@@ -213,11 +214,10 @@ class BlackjackGame:
         if final:
             color = discord.Color.green() if not self.player_hand.busted else discord.Color.red()
         else:
-            color = discord.Color(0x2F3136) # Dark gray for in-progress
+            color = discord.Color(COLOR_INFO) # in-progress
 
         embed = discord.Embed(
-            title="BLACKJACK",
-            description="━━━━━━━━━━━━━━━━━━━━━━",
+            title="Blackjack",
             color=color
         )
 
@@ -232,14 +232,8 @@ class BlackjackGame:
             dealer_value = "[?]"
 
         embed.add_field(
-            name="DEALER",
+            name="Dealer",
             value=f"```\n{dealer_cards}\n```\n**Value:** {dealer_value}",
-            inline=False
-        )
-
-        embed.add_field(
-            name="━━━━━━━━━━━━━━━━━━━━━━",
-            value="",
             inline=False
         )
 
@@ -257,33 +251,21 @@ class BlackjackGame:
             status_text = "IN PLAY"
 
         embed.add_field(
-            name=f"PLAYER: {self.player.display_name}",
+            name=f"Player: {self.player.display_name}",
             value=f"```\n{player_cards}\n```\n**Value:** {player_value} | **Status:** {status_text}",
-            inline=False
-        )
-
-        embed.add_field(
-            name="━━━━━━━━━━━━━━━━━━━━━━",
-            value="",
             inline=False
         )
 
         # Bet information
         embed.add_field(
-            name="WAGER",
+            name="Wager",
             value=f"```\n{self.player_hand.bet:,} coins\n```",
             inline=True
         )
 
-        if final:
-            embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="",
-                inline=False
-            )
-
         # Footer
-        embed.set_footer(text="Casino • Blackjack Table")
+        if final:
+            embed.set_footer(text=responsible_gaming_notice())
 
         return embed
 
@@ -402,13 +384,13 @@ class BlackjackGame:
             result_value = f"```diff\n- LOSS\n```\n**Lost:** {self.initial_bet:,} coins"
 
         embed.add_field(
-            name="OUTCOME",
+            name="Outcome",
             value=result_value,
             inline=False
         )
 
         embed.add_field(
-            name="BALANCE",
+            name="Balance",
             value=f"```\n{wallet.balance:,} coins\n```",
             inline=False
         )
@@ -644,7 +626,7 @@ class Casino(commands.Cog):
                 multiplier = 2
 
             # Create result embed
-            embed = discord.Embed(title="Roulette", color=discord.Color.red())
+            embed = discord.Embed(title="Roulette", color=COLOR_INFO)
 
             # Determine color display
             if result_number == 0:
@@ -684,14 +666,14 @@ class Casino(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="YOU WIN!",
+                    name="You Won",
                     value=f"Payout: {payout:,} coins (+{profit:,})",
                     inline=False
                 )
                 embed.color = discord.Color.green()
             else:
                 embed.add_field(
-                    name="YOU LOSE!",
+                    name="You Lost",
                     value=f"Lost: {amount:,} coins",
                     inline=False
                 )
@@ -730,7 +712,7 @@ class Casino(commands.Cog):
             embed = discord.Embed(
                 title="Slot Machine",
                 description="Spinning...",
-                color=discord.Color.blue()
+                color=COLOR_INFO
             )
             message = await ctx.send(embed=embed)
 
@@ -753,14 +735,13 @@ class Casino(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="WIN!",
+                    name="You Won",
                     value=f"Payout: {payout:,} coins (+{profit:,})\n**{multiplier}x** multiplier!",
                     inline=False
                 )
                 embed.color = discord.Color.gold()
             else:
-                embed.add_field(
-                    name="Loss",
+                embed.add_field(                    name="You Lost",
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
@@ -808,7 +789,7 @@ class Casino(commands.Cog):
             won = result == choice
 
             # Animated embed
-            embed = discord.Embed(title="Coinflip", color=discord.Color.blue())
+            embed = discord.Embed(title="Coinflip", color=COLOR_INFO)
             embed.add_field(name="Your Choice", value=choice.title(), inline=True)
             embed.add_field(name="Flipping...", value="", inline=True)
             message = await ctx.send(embed=embed)
@@ -816,7 +797,7 @@ class Casino(commands.Cog):
             await asyncio.sleep(1.5)
 
             # Result
-            embed = discord.Embed(title="Coinflip", color=discord.Color.blue())
+            embed = discord.Embed(title="Coinflip", color=COLOR_INFO)
             embed.add_field(name="Your Choice", value=choice.title(), inline=True)
             embed.add_field(name="Result", value=result.title(), inline=True)
 
@@ -831,14 +812,14 @@ class Casino(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="YOU WIN!",
+                    name="You Won",
                     value=f"{payout:,} coins (+{profit:,})",
                     inline=False
                 )
                 embed.color = discord.Color.green()
             else:
                 embed.add_field(
-                    name="YOU LOSE!",
+                    name="You Lost",
                     value=f"-{bet:,} coins",
                     inline=False
                 )
@@ -898,7 +879,7 @@ class Casino(commands.Cog):
                 multiplier = 10 # Exact prediction
 
             # Create result embed
-            embed = discord.Embed(title="Dice Roll", color=discord.Color.blue())
+            embed = discord.Embed(title="Dice Roll", color=COLOR_INFO)
             embed.add_field(
                 name="Roll Result",
                 value=f"Die 1: **{die1}** | Die 2: **{die2}**\n**Total: {total}**",
@@ -921,14 +902,14 @@ class Casino(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="WIN!",
+                    name="You Won",
                     value=f"{payout:,} coins (+{profit:,})\n**{multiplier}x** multiplier!",
                     inline=False
                 )
                 embed.color = discord.Color.green()
             else:
                 embed.add_field(
-                    name="LOSE!",
+                    name="You Lost",
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
@@ -974,7 +955,7 @@ class Casino(commands.Cog):
             embed = discord.Embed(
                 title="Crash Game",
                 description="Starting...",
-                color=discord.Color.blue()
+                color=COLOR_INFO
             )
             embed.add_field(name="Your Target", value=f"{target:.2f}x", inline=True)
             embed.add_field(name="Current Bet", value=f"{bet:,} coins", inline=True)
@@ -1004,14 +985,14 @@ class Casino(commands.Cog):
                 )
 
                 embed.add_field(
-                    name="CASHED OUT!",
+                    name="Cashed Out",
                     value=f"{payout:,} coins (+{profit:,})\nCrashed at {crash_point:.2f}x",
                     inline=False
                 )
                 embed.color = discord.Color.green()
             else:
                 embed.add_field(
-                    name="CRASHED!",
+                    name="Crashed",
                     value=f"Crashed at {crash_point:.2f}x\nLost: {bet:,} coins",
                     inline=False
                 )
@@ -1047,7 +1028,7 @@ class Casino(commands.Cog):
             embed = discord.Embed(
                 title="Russian Roulette",
                 description="Loading chamber...",
-                color=discord.Color.red()
+                color=COLOR_INFO
             )
             message = await ctx.send(embed=embed)
 
@@ -1068,7 +1049,7 @@ class Casino(commands.Cog):
                 # BANG! Lost
                 embed.description = "**BANG!**"
                 embed.add_field(
-                    name="YOU'RE OUT!",
+                    name="You're Out",
                     value=f"Lost: {bet:,} coins",
                     inline=False
                 )
@@ -1086,7 +1067,7 @@ class Casino(commands.Cog):
 
                 embed.description = "*Click*"
                 embed.add_field(
-                    name="YOU SURVIVED!",
+                    name="You Survived",
                     value=f"{payout:,} coins (+{profit:,})\nYou got lucky!",
                     inline=False
                 )
@@ -1125,27 +1106,20 @@ class Casino(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title="WAR",
-                description="━━━━━━━━━━━━━━━━━━━━━━",
-                color=0x2F3136
+                title="War",
+                color=COLOR_INFO
             )
 
             embed.add_field(
-                name="DEALER",
+                name="Dealer",
                 value=f"```\n{dealer_card}\n```\n**Value:** [{dealer_card.value}]",
                 inline=True
             )
 
             embed.add_field(
-                name="PLAYER",
+                name="Player",
                 value=f"```\n{player_card}\n```\n**Value:** [{player_card.value}]",
                 inline=True
-            )
-
-            embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="",
-                inline=False
             )
 
             # Determine winner
@@ -1173,18 +1147,18 @@ class Casino(commands.Cog):
             await session.commit()
 
             embed.add_field(
-                name="OUTCOME",
+                name="Outcome",
                 value=result_text,
                 inline=False
             )
 
             embed.add_field(
-                name="BALANCE",
+                name="Balance",
                 value=f"```\n{wallet.balance:,} coins\n```",
                 inline=False
             )
 
-            embed.set_footer(text="Casino • War Table")
+            embed.set_footer(text=responsible_gaming_notice())
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="baccarat", aliases=['bc', 'bac'], description="Play Baccarat! Bet on Player, Banker, or Tie!")
@@ -1235,34 +1209,29 @@ class Casino(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title="BACCARAT",
-                description="━━━━━━━━━━━━━━━━━━━━━━",
-                color=0x2F3136
+                title="Baccarat",
+                color=COLOR_INFO
             )
 
             player_cards = ' '.join(str(c) for c in player_hand)
             banker_cards = ' '.join(str(c) for c in banker_hand)
 
             embed.add_field(
-                name="PLAYER HAND",
+                name="Player Hand",
                 value=f"```\n{player_cards}\n```\n**Value:** [{player_value}]",
                 inline=False
             )
 
             embed.add_field(
-                name="BANKER HAND",
+                name="Banker Hand",
                 value=f"```\n{banker_cards}\n```\n**Value:** [{banker_value}]",
                 inline=False
             )
 
-            embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="",
-                inline=False
-            )
+
 
             embed.add_field(
-                name="YOUR BET",
+                name="Your Bet",
                 value=f"```\n{bet_on.upper()}\n```",
                 inline=True
             )
@@ -1301,18 +1270,18 @@ class Casino(commands.Cog):
             await session.commit()
 
             embed.add_field(
-                name="OUTCOME",
+                name="Outcome",
                 value=result_text,
                 inline=False
             )
 
             embed.add_field(
-                name="BALANCE",
+                name="Balance",
                 value=f"```\n{wallet.balance:,} coins\n```",
                 inline=False
             )
 
-            embed.set_footer(text="Casino • Baccarat Table")
+            embed.set_footer(text=responsible_gaming_notice())
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="hilo", aliases=['hl', 'highlow'], description="Guess if the next card is higher or lower!")
@@ -1348,31 +1317,26 @@ class Casino(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title="HIGH-LOW",
-                description="━━━━━━━━━━━━━━━━━━━━━━",
-                color=0x2F3136
+                title="High-Low",
+                color=COLOR_INFO
             )
 
             embed.add_field(
-                name="CURRENT CARD",
+                name="Current Card",
                 value=f"```\n{current_card}\n```\n**Value:** [{current_card.value}]",
                 inline=True
             )
 
             embed.add_field(
-                name="NEXT CARD",
+                name="Next Card",
                 value=f"```\n{next_card}\n```\n**Value:** [{next_card.value}]",
                 inline=True
             )
 
-            embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="",
-                inline=False
-            )
+
 
             embed.add_field(
-                name="YOUR GUESS",
+                name="Your Guess",
                 value=f"```\n{guess.upper()}\n```",
                 inline=True
             )
@@ -1409,18 +1373,18 @@ class Casino(commands.Cog):
             await session.commit()
 
             embed.add_field(
-                name="OUTCOME",
+                name="Outcome",
                 value=result_text,
                 inline=False
             )
 
             embed.add_field(
-                name="BALANCE",
+                name="Balance",
                 value=f"```\n{wallet.balance:,} coins\n```",
                 inline=False
             )
 
-            embed.set_footer(text="Casino • High-Low Table")
+            embed.set_footer(text=responsible_gaming_notice())
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="keno", aliases=['k', 'lotto'], description="Pick numbers and hope they match!")
@@ -1471,9 +1435,8 @@ class Casino(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title="KENO",
-                description="━━━━━━━━━━━━━━━━━━━━━━",
-                color=0x2F3136
+                title="Keno",
+                color=COLOR_INFO
             )
 
             picked_str = ', '.join(str(n) for n in sorted(picked))
@@ -1481,22 +1444,18 @@ class Casino(commands.Cog):
             matched_str = ', '.join(str(n) for n in matched_nums) if matched_nums else "None"
 
             embed.add_field(
-                name="YOUR NUMBERS",
+                name="Your Numbers",
                 value=f"```\n{picked_str}\n```",
                 inline=False
             )
 
             embed.add_field(
-                name="MATCHED",
+                name="Matched",
                 value=f"```\n{matched_str}\n```\n**Count:** {matches}/5",
                 inline=False
             )
 
-            embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="",
-                inline=False
-            )
+
 
             # Calculate payout
             multiplier = payouts.get(matches, 0)
@@ -1519,18 +1478,18 @@ class Casino(commands.Cog):
             await session.commit()
 
             embed.add_field(
-                name="OUTCOME",
+                name="Outcome",
                 value=result_text,
                 inline=False
             )
 
             embed.add_field(
-                name="BALANCE",
+                name="Balance",
                 value=f"```\n{wallet.balance:,} coins\n```",
                 inline=False
             )
 
-            embed.set_footer(text="Casino • Keno")
+            embed.set_footer(text=responsible_gaming_notice())
             await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="poker", aliases=['pk', 'holdem', 'texasholdem'], description="Play Texas Hold'em Poker against the dealer")
@@ -1701,20 +1660,20 @@ class Casino(commands.Cog):
             # Create initial embed
             def create_poker_embed(stage: str, show_dealer: bool = False):
                 embed = discord.Embed(
-                    title="TEXAS HOLD'EM POKER",
-                    color=0x2F3136
+                    title="Texas Hold'em Poker",
+                    color=COLOR_INFO
                 )
 
                 embed.add_field(
-                    name="━━━━━━━━━━━━━━━━━━━━━━",
-                    value=f"**STAGE:** {stage.upper()}",
+                    name="Stage",
+                    value=stage.title(),
                     inline=False
                 )
 
                 # Player hand
                 player_cards_str = " ".join([str(c) for c in player_hand])
                 embed.add_field(
-                    name="YOUR HAND",
+                    name="Your Hand",
                     value=f"```\n{player_cards_str}\n```",
                     inline=False
                 )
@@ -1726,7 +1685,7 @@ class Casino(commands.Cog):
                     community_str = "No cards yet"
 
                 embed.add_field(
-                    name="COMMUNITY CARDS",
+                    name="Community Cards",
                     value=f"```\n{community_str}\n```",
                     inline=False
                 )
@@ -1738,24 +1697,24 @@ class Casino(commands.Cog):
                     dealer_cards_str = "?? ??"
 
                 embed.add_field(
-                    name="DEALER HAND",
+                    name="Dealer Hand",
                     value=f"```\n{dealer_cards_str}\n```",
                     inline=False
                 )
 
                 embed.add_field(
-                    name="POT",
+                    name="Pot",
                     value=f"```\n{pot:,} coins\n```",
                     inline=True
                 )
 
                 embed.add_field(
-                    name="YOUR BET",
+                    name="Your Bet",
                     value=f"```\n{bet:,} coins\n```",
                     inline=True
                 )
 
-                embed.set_footer(text="Casino • Texas Hold'em Poker")
+                embed.set_footer(text=responsible_gaming_notice())
                 return embed
 
             # PRE-FLOP
@@ -1789,23 +1748,23 @@ class Casino(commands.Cog):
 
             if view.action == "fold":
                 embed = discord.Embed(
-                    title="TEXAS HOLD'EM POKER",
+                    title="Texas Hold'em Poker",
                     color=discord.Color.red()
                 )
                 embed.add_field(
-                    name="OUTCOME",
+                    name="Outcome",
                     value="```diff\n- FOLDED\n```\n**Lost:** " + f"{bet:,} coins",
                     inline=False
                 )
 
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 embed.add_field(
-                    name="BALANCE",
+                    name="Balance",
                     value=f"```\n{wallet.balance:,} coins\n```",
                     inline=False
                 )
 
-                embed.set_footer(text="Casino • Texas Hold'em Poker")
+                embed.set_footer(text=responsible_gaming_notice())
                 await message.edit(embed=embed, view=None)
                 return
 
@@ -1818,23 +1777,23 @@ class Casino(commands.Cog):
 
             if view.action == "fold":
                 embed = discord.Embed(
-                    title="TEXAS HOLD'EM POKER",
+                    title="Texas Hold'em Poker",
                     color=discord.Color.red()
                 )
                 embed.add_field(
-                    name="OUTCOME",
+                    name="Outcome",
                     value="```diff\n- FOLDED\n```\n**Lost:** " + f"{bet:,} coins",
                     inline=False
                 )
 
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 embed.add_field(
-                    name="BALANCE",
+                    name="Balance",
                     value=f"```\n{wallet.balance:,} coins\n```",
                     inline=False
                 )
 
-                embed.set_footer(text="Casino • Texas Hold'em Poker")
+                embed.set_footer(text=responsible_gaming_notice())
                 await message.edit(embed=embed, view=None)
                 return
 
@@ -1847,23 +1806,23 @@ class Casino(commands.Cog):
 
             if view.action == "fold":
                 embed = discord.Embed(
-                    title="TEXAS HOLD'EM POKER",
+                    title="Texas Hold'em Poker",
                     color=discord.Color.red()
                 )
                 embed.add_field(
-                    name="OUTCOME",
+                    name="Outcome",
                     value="```diff\n- FOLDED\n```\n**Lost:** " + f"{bet:,} coins",
                     inline=False
                 )
 
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 embed.add_field(
-                    name="BALANCE",
+                    name="Balance",
                     value=f"```\n{wallet.balance:,} coins\n```",
                     inline=False
                 )
 
-                embed.set_footer(text="Casino • Texas Hold'em Poker")
+                embed.set_footer(text=responsible_gaming_notice())
                 await message.edit(embed=embed, view=None)
                 return
 
@@ -1876,23 +1835,23 @@ class Casino(commands.Cog):
 
             if view.action == "fold":
                 embed = discord.Embed(
-                    title="TEXAS HOLD'EM POKER",
+                    title="Texas Hold'em Poker",
                     color=discord.Color.red()
                 )
                 embed.add_field(
-                    name="OUTCOME",
+                    name="Outcome",
                     value="```diff\n- FOLDED\n```\n**Lost:** " + f"{bet:,} coins",
                     inline=False
                 )
 
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 embed.add_field(
-                    name="BALANCE",
+                    name="Balance",
                     value=f"```\n{wallet.balance:,} coins\n```",
                     inline=False
                 )
 
-                embed.set_footer(text="Casino • Texas Hold'em Poker")
+                embed.set_footer(text=responsible_gaming_notice())
                 await message.edit(embed=embed, view=None)
                 return
 
@@ -1904,13 +1863,13 @@ class Casino(commands.Cog):
             wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
 
             embed = discord.Embed(
-                title="TEXAS HOLD'EM POKER",
-                color=0x2F3136
+                title="Texas Hold'em Poker",
+                color=COLOR_INFO
             )
 
             embed.add_field(
-                name="━━━━━━━━━━━━━━━━━━━━━━",
-                value="**STAGE:** SHOWDOWN",
+                name="Stage",
+                value="Showdown",
                 inline=False
             )
 
@@ -1920,19 +1879,19 @@ class Casino(commands.Cog):
             community_str = " ".join([str(c) for c in community_cards])
 
             embed.add_field(
-                name="YOUR HAND",
+                name="Your Hand",
                 value=f"```\n{player_cards_str}\n```\n**{player_hand_name}**",
                 inline=False
             )
 
             embed.add_field(
-                name="COMMUNITY CARDS",
+                name="Community Cards",
                 value=f"```\n{community_str}\n```",
                 inline=False
             )
 
             embed.add_field(
-                name="DEALER HAND",
+                name="Dealer Hand",
                 value=f"```\n{dealer_cards_str}\n```\n**{dealer_hand_name}**",
                 inline=False
             )
@@ -2010,18 +1969,18 @@ class Casino(commands.Cog):
             await session.commit()
 
             embed.add_field(
-                name="OUTCOME",
+                name="Outcome",
                 value=result_text,
                 inline=False
             )
 
             embed.add_field(
-                name="BALANCE",
+                name="Balance",
                 value=f"```\n{wallet.balance:,} coins\n```",
                 inline=False
             )
 
-            embed.set_footer(text="Casino • Texas Hold'em Poker")
+            embed.set_footer(text=responsible_gaming_notice())
             await message.edit(embed=embed, view=None)
 
 

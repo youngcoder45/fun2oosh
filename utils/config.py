@@ -37,6 +37,7 @@ class Config(BaseSettings):
     daily_reward: int = Field(default=500)
     weekly_reward: int = Field(default=2000)
     monthly_reward: int = Field(default=5000)
+    collect_reward: int = Field(default=50) # fallback base rate when no income role is configured
     collect_cooldown: int = Field(default=3600)
     work_cooldown: int = Field(default=1800)
     daily_cooldown: int = Field(default=86400)

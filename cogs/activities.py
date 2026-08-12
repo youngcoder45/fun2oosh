@@ -18,7 +18,7 @@ from services.progression import ACHIEVEMENTS, AchievementService, ProgressionSe
 from utils.config import Config
 from utils.cooldowns import check_cooldown
 from utils.economy_utils import EconomyUtils
-from utils.helpers import EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
 
 # activity: (success_rate, min_reward, max_reward, failure_text, tool_key, cooldown)
 ACTIVITIES = {
@@ -170,10 +170,9 @@ class Activities(commands.Cog):
             inv_value = await ItemService.inventory_value(session, target.id)
             total = EconomyService.networth(wallet, inv_value)
             await session.commit()
-
         embed = discord.Embed(
             title=f"{target.display_name}'s Net Worth",
-            color=discord.Color.teal(),
+            color=COLOR_INFO,
         )
         embed.add_field(name="Wallet", value=format_coins(wallet.balance), inline=True)
         embed.add_field(name="Bank", value=format_coins(wallet.bank), inline=True)
@@ -237,11 +236,7 @@ class Activities(commands.Cog):
         lines = "\n".join(
             f"**{a['name']}** — {a['desc']}" for a in new_achievements
         )
-        embed = discord.Embed(
-            title="Achievements Unlocked!",
-            description=lines,
-            color=discord.Color.gold(),
-        )
+        embed = EmbedBuilder.gold_embed("Achievements Unlocked!", lines)
         await ctx.send(embed=embed)
 
 

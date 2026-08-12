@@ -8,6 +8,7 @@ from .bet import Bet
 from .guild_config import GuildConfig
 from .inventory import InventoryItem
 from .item import Item
+from .role_income import RoleIncome
 from .transaction import Transaction
 from .user import User
 from .user_achievement import UserAchievement
@@ -24,6 +25,7 @@ __all__ = [
     'Transaction',
     'Bet',
     'Item',
+    'RoleIncome',
     'InventoryItem',
     'GuildConfig',
     'AuditLog',

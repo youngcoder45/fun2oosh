@@ -19,6 +19,7 @@ SETTINGS: dict = {
     'daily_reward': ('int', 1, 10_000_000, 'daily reward'),
     'weekly_reward': ('int', 1, 50_000_000, 'weekly reward'),
     'monthly_reward': ('int', 1, 200_000_000, 'monthly reward'),
+    'collect_reward': ('int', 1, 1_000_000, 'hourly collect reward (fallback)'),
     'tax_rate': ('float', 0, 0.5, 'transfer tax rate'),
     'min_bet': ('int', 1, 1_000_000_000, 'minimum bet'),
     'max_bet': ('int', 1, 1_000_000_000, 'maximum bet'),

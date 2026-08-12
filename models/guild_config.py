@@ -24,6 +24,7 @@ class GuildConfig(Base):
     daily_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     weekly_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     monthly_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    collect_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Economy rules
     tax_rate: Mapped[float] = mapped_column(Float, default=0.0) # 0.0 – 0.5 (applied to transfers)

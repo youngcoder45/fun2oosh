@@ -2,6 +2,8 @@
 Admin commands cog.
 """
 
+from typing import Optional
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,10 +12,54 @@ from sqlalchemy import text
 from bot import Fun2OoshBot
 from services.guild import SETTINGS, AuditService, GuildConfigService
 from services.items import ItemService
+from services.role_income import RoleIncomeService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
 from utils.pagination import PaginationView
+
+RESET_TABLES = (
+    "bets",
+    "transactions",
+    "wallets",
+    "inventory_items",
+    "role_income",
+    "user_achievements",
+)
+
+
+class ConfirmView(discord.ui.View):
+    """Button-based yes/no confirmation (Components V2)."""
+
+    def __init__(self, owner_id: int, timeout: float = 30.0):
+        super().__init__(timeout=timeout)
+        self.owner_id = owner_id
+        self.value: Optional[bool] = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message(
+                "This confirmation is not for you.", ephemeral=True
+            )
+            return False
+        return True
+
+    def _finish(self) -> None:
+        for child in self.children:
+            child.disabled = True  # type: ignore[attr-defined]
+        self.stop()
+
+    @discord.ui.button(label="Confirm Reset", style=discord.ButtonStyle.danger)
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self._finish()
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self._finish()
+        await interaction.response.edit_message(view=self)
 
 
 class Admin(commands.Cog):
@@ -91,47 +137,36 @@ class Admin(commands.Cog):
             await ctx.send(embed=embed)
             return
 
-        # Double confirmation with reaction
+        # Confirmation dialog with buttons
         embed = EmbedBuilder.error_embed(
-            "FINAL WARNING",
-            "You are about to **IRREVERSIBLY DELETE** all economy data!\n\n"
-            "React with to proceed or to cancel."
+            "Final Warning",
+            "You are about to **irreversibly delete** all economy data:\n\n"
+            "• All user wallets and balances\n"
+            "• All transaction history\n"
+            "• All bet records\n"
+            "• All inventories and role income settings\n\n"
+            "This cannot be undone."
         )
-        message = await ctx.send(embed=embed)
-        await message.add_reaction("")
-        await message.add_reaction("")
+        view = ConfirmView(owner_id=ctx.author.id)
+        await ctx.send(embed=embed, view=view)
+        timed_out = await view.wait()
 
-        def check(reaction, user):
-            return (
-                user == ctx.author
-                and str(reaction.emoji) in ["", ""]
-                and reaction.message.id == message.id
-            )
-
-        try:
-            reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-
-            if str(reaction.emoji) == "":
-                await ctx.send("Economy reset cancelled.")
-                return
-
-            if str(reaction.emoji) == "":
-                # Proceed with reset
-                async with self.bot.get_session() as session:
-                    # Delete all data in correct order (respecting foreign keys)
-                    await session.execute(text("DELETE FROM bets"))
-                    await session.execute(text("DELETE FROM transactions"))
-                    await session.execute(text("DELETE FROM wallets"))
-                    await session.commit()
-
-                embed = EmbedBuilder.success_embed(
-                    "Economy Reset Complete",
-                    "All economy data has been permanently deleted and reset."
-                )
-                await ctx.send(embed=embed)
-
-        except TimeoutError:
+        if timed_out:
             await ctx.send("Economy reset timed out. Operation cancelled.")
+            return
+        if view.value is False:
+            await ctx.send("Economy reset cancelled.")
+            return
+
+        # Proceed with reset
+        async with self.bot.get_session() as session:
+            await self._reset_all_data(session)
+
+        embed = EmbedBuilder.success_embed(
+            "Economy Reset Complete",
+            "All economy data has been permanently deleted and reset."
+        )
+        await ctx.send(embed=embed)
 
     @app_commands.command(name='reset_economy', description='Reset all economy data (admin only - dangerous)')
     @app_commands.describe(confirmation='Type CONFIRM to proceed')
@@ -155,19 +190,19 @@ class Admin(commands.Cog):
 
         # Simple confirmation for slash commands
         embed = EmbedBuilder.error_embed(
-            "FINAL WARNING",
-            "You are about to **IRREVERSIBLY DELETE** all economy data!\n\n"
-            "This action cannot be undone. Are you sure?"
+            "Final Warning",
+            "You are about to **irreversibly delete** all economy data:\n\n"
+            "• All user wallets and balances\n"
+            "• All transaction history\n"
+            "• All bet records\n"
+            "• All inventories and role income settings\n\n"
+            "This cannot be undone."
         )
         await interaction.response.send_message(embed=embed)
 
         # For slash commands, we'll just proceed since they already confirmed
         async with self.bot.get_session() as session:
-            # Delete all data in correct order (respecting foreign keys)
-            await session.execute(text("DELETE FROM bets"))
-            await session.execute(text("DELETE FROM transactions"))
-            await session.execute(text("DELETE FROM wallets"))
-            await session.commit()
+            await self._reset_all_data(session)
 
         embed = EmbedBuilder.success_embed(
             "Economy Reset Complete",
@@ -186,11 +221,7 @@ class Admin(commands.Cog):
         async with self.bot.get_session() as session:
             row = await GuildConfigService.get(session, ctx.guild.id)
             summary = GuildConfigService.describe(row, self.config)
-
-        embed = EmbedBuilder.success_embed(
-            "Economy Configuration",
-            summary,
-        )
+            embed = EmbedBuilder.info_embed("Economy Configuration", summary)
         embed.set_footer(text="Change values with: !econfig set <key> <value>")
         await ctx.send(embed=embed)
 
@@ -214,7 +245,7 @@ class Admin(commands.Cog):
         embed = discord.Embed(
             title="Configurable Settings",
             description="Use `!econfig set <key> <value>` to change one.",
-            color=discord.Color.blurple(),
+            color=COLOR_INFO,
         )
         for key in sorted(SETTINGS):
             kind, lo, hi, label = SETTINGS[key]
@@ -313,7 +344,7 @@ class Admin(commands.Cog):
             embed = discord.Embed(
                 title="Item Catalog",
                 description="All items including limited ones.",
-                color=discord.Color.blurple(),
+                color=COLOR_INFO,
             )
             for item in items[start:start + per_page]:
                 embed.add_field(
@@ -344,10 +375,9 @@ class Admin(commands.Cog):
 
         if not logs:
             return await ctx.send("No audit log entries yet.")
-
         embed = discord.Embed(
             title=f"Audit Log (last {len(logs)})",
-            color=discord.Color.dark_grey(),
+            color=COLOR_INFO,
         )
         for entry in logs:
             embed.add_field(
@@ -359,6 +389,91 @@ class Admin(commands.Cog):
                 ),
                 inline=False,
             )
+        await ctx.send(embed=embed)
+
+    @staticmethod
+    async def _reset_all_data(session) -> None:
+        """Delete all economy data in FK-safe order."""
+        for table in RESET_TABLES:
+            await session.execute(text(f"DELETE FROM {table}"))
+        await session.commit()
+
+    # -------------------------------------------------------- role income
+
+    @commands.group(name='income', aliases=['roleincome'], invoke_without_command=True)
+    async def income(self, ctx: commands.Context):
+        """Manage role-based hourly income for !collect."""
+        await self.income_list(ctx)
+
+    @income.command(name='add')
+    async def income_add(self, ctx: commands.Context, role: discord.Role, amount: int):
+        """Add an hourly income for a role: !income add <role> <amount>."""
+        await self._income_set(ctx, role, amount)
+
+    @income.command(name='set')
+    async def income_set(self, ctx: commands.Context, role: discord.Role, amount: int):
+        """Edit the hourly income for a role: !income set <role> <amount>."""
+        await self._income_set(ctx, role, amount)
+
+    async def _income_set(self, ctx: commands.Context, role: discord.Role, amount: int) -> Optional[discord.Message]:
+        """Shared add/set logic for role income."""
+        if ctx.guild is None:
+            return await ctx.send("This command only works in servers.")
+        if amount <= 0:
+            return await ctx.send("Income must be a positive number of coins per hour.")
+        if amount > 1_000_000:
+            return await ctx.send("Income cannot exceed 1,000,000 coins per hour.")
+        async with self.bot.get_session() as session:
+            await RoleIncomeService.set(session, ctx.guild.id, role.id, amount)
+            await AuditService.log(
+                session, ctx.author.id, 'income_set',
+                f'{role.id} ({role.name}) = {amount}/hour', guild_id=ctx.guild.id,
+            )
+        embed = EmbedBuilder.success_embed(
+            "Income Set",
+            f"**{role.name}** now pays {format_coins(amount)} per hour.",
+        )
+        return await ctx.send(embed=embed)
+
+    @income.command(name='remove')
+    async def income_remove(self, ctx: commands.Context, role: discord.Role):
+        """Remove hourly income from a role: !income remove <role>."""
+        if ctx.guild is None:
+            return await ctx.send("This command only works in servers.")
+        async with self.bot.get_session() as session:
+            removed = await RoleIncomeService.remove(session, ctx.guild.id, role.id)
+            if removed:
+                await AuditService.log(
+                    session, ctx.author.id, 'income_remove',
+                    f'{role.id} ({role.name})', guild_id=ctx.guild.id,
+                )
+        if removed:
+            embed = EmbedBuilder.success_embed(
+                "Income Removed",
+                f"**{role.name}** no longer grants hourly income.",
+            )
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(f"**{role.name}** has no configured income.")
+
+    @income.command(name='list')
+    async def income_list(self, ctx: commands.Context):
+        """List all configured role incomes."""
+        if ctx.guild is None:
+            return await ctx.send("This command only works in servers.")
+        async with self.bot.get_session() as session:
+            rows = await RoleIncomeService.list_all(session, ctx.guild.id)
+        if not rows:
+            return await ctx.send(
+                "No income roles configured. Use `!income add <role> <amount>` to set one."
+            )
+        lines = []
+        for row in rows:
+            role = ctx.guild.get_role(row.role_id)
+            label = role.name if role is not None else f"Role {row.role_id}"
+            lines.append(f"**{label}** — {format_coins(row.hourly_rate)} per hour")
+        embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
+        embed.set_footer(text="!collect pays your highest eligible income role")
         await ctx.send(embed=embed)
 
 
