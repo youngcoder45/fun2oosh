@@ -24,8 +24,10 @@ from utils.config import Config
 from utils.cooldowns import check_cooldown
 from utils.economy_utils import EconomyUtils
 from utils.helpers import (
+    COLOR_ERROR,
     COLOR_INFO,
     COLOR_SUCCESS,
+    COLOR_WARNING,
     EmbedBuilder,
     event_names,
     format_coins,
@@ -82,12 +84,19 @@ class Economy(commands.Cog):
                 session, ctx.author.id, reward, "work", "Daily work reward"
             )
             new = await AchievementService.check(session, ctx.author.id, "work")
+            if final > 0:
+                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
+                balance = wallet.balance if wallet is not None else None
+            else:
+                balance = None
 
         if final > 0:
             user, guild = event_names(ctx.author, ctx.guild)
-            embed = EmbedBuilder.success_embed(
-                "Work Complete!",
+            embed = EmbedBuilder.activity_embed(
+                "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
+                balance=balance,
+                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
@@ -109,12 +118,19 @@ class Economy(commands.Cog):
                 session, interaction.user.id, reward, "work", "Daily work reward"
             )
             new = await AchievementService.check(session, interaction.user.id, "work")
+            if final > 0:
+                wallet = await EconomyUtils.get_wallet(session, interaction.user.id)
+                balance = wallet.balance if wallet is not None else None
+            else:
+                balance = None
 
         if final > 0:
             user, guild = event_names(interaction.user, interaction.guild)
-            embed = EmbedBuilder.success_embed(
-                "Work Complete!",
+            embed = EmbedBuilder.activity_embed(
+                "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
+                balance=balance,
+                currency=self.config.currency_name,
             )
             await interaction.response.send_message(embed=embed)
         else:
@@ -145,8 +161,9 @@ class Economy(commands.Cog):
                 )
         if earned <= 0:
             return await ctx.send(
-                f"All your income roles are on cooldown. "
-                f"Earliest claim available <t:{next_ts}:R>."
+                f"All your income roles are on cooldown.\n"
+                f"Try again <t:{next_ts}:R>\n"
+                f"Available at <t:{next_ts}:F>"
             )
         embed = self._collect_embed(breakdown, earned, balance, next_ts)
         await ctx.send(embed=embed)
@@ -176,8 +193,9 @@ class Economy(commands.Cog):
                 )
         if earned <= 0:
             return await interaction.response.send_message(
-                f"All your income roles are on cooldown. "
-                f"Earliest claim available <t:{next_ts}:R>.",
+                f"All your income roles are on cooldown.\n"
+                f"Try again <t:{next_ts}:R>\n"
+                f"Available at <t:{next_ts}:F>",
                 ephemeral=True,
             )
         embed = self._collect_embed(breakdown, earned, balance, next_ts)
@@ -612,16 +630,20 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "beg", "Begging reward"
                 )
                 await session.commit()
+                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
-            embed = EmbedBuilder.success_embed(
-                "Success!",
+            embed = EmbedBuilder.activity_embed(
+                "begged",
                 event_message("beg_success", reward, self.config.currency_name, user, guild),
+                balance=wallet.balance if wallet is not None else None,
+                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
-            embed = EmbedBuilder.error_embed(
-                "No Luck",
+            embed = EmbedBuilder.activity_embed(
+                "begged",
                 event_message("beg_failure", 0, self.config.currency_name, user, guild),
+                color=COLOR_ERROR,
             )
             await ctx.send(embed=embed)
 
@@ -659,10 +681,13 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "crime", f"Crime: {crime_desc}"
                 )
                 await session.commit()
+                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
-            embed = EmbedBuilder.success_embed(
-                "Crime Success!",
+            embed = EmbedBuilder.activity_embed(
+                "crime",
                 event_message("crime_success", reward, self.config.currency_name, user, guild),
+                balance=wallet.balance if wallet is not None else None,
+                currency=self.config.currency_name,
             )
             await ctx.send(embed=embed)
         else:
@@ -679,7 +704,13 @@ class Economy(commands.Cog):
                 else:
                     loss_msg = "You were caught but had no money to pay the fine!"
 
-            embed = EmbedBuilder.error_embed("Caught!", loss_msg)
+            embed = EmbedBuilder.activity_embed(
+                "crime",
+                loss_msg,
+                color=COLOR_ERROR,
+                balance=wallet.balance or 0,
+                currency=self.config.currency_name,
+            )
             await ctx.send(embed=embed)
 
         async with self.bot.get_session() as session:
@@ -743,9 +774,11 @@ class Economy(commands.Cog):
                 )
                 await session.commit()
 
-                embed = EmbedBuilder.success_embed(
-                    "Robbery Success!",
+                embed = EmbedBuilder.activity_embed(
+                    "robbed",
                     f"You robbed {format_coins(rob_amount)} from {user.mention}!",
+                    balance=robber_wallet.balance or 0,
+                    currency=self.config.currency_name,
                 )
                 await ctx.send(embed=embed)
             else:
@@ -765,10 +798,13 @@ class Economy(commands.Cog):
                 )
                 await session.commit()
 
-                embed = EmbedBuilder.error_embed(
-                    "Robbery Failed!",
+                embed = EmbedBuilder.activity_embed(
+                    "robbed",
                     f"You were caught trying to rob {user.mention}!\n"
                     f"You lost {format_coins(fine)} and they got {format_coins(fine // 2)}!",
+                    color=COLOR_ERROR,
+                    balance=robber_wallet.balance or 0,
+                    currency=self.config.currency_name,
                 )
                 await ctx.send(embed=embed)
 
@@ -954,15 +990,19 @@ class Economy(commands.Cog):
                     session, ctx.author.id, reward, "search", f"Searched {location}"
                 )
                 await session.commit()
+                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
 
-            embed = EmbedBuilder.success_embed(
-                "Found!",
+            embed = EmbedBuilder.activity_embed(
+                "search",
                 event_message("search_success", reward, self.config.currency_name, user, guild),
+                balance=wallet.balance if wallet is not None else None,
+                currency=self.config.currency_name,
             )
         else:
-            embed = EmbedBuilder.warning_embed(
-                "Nothing Found",
+            embed = EmbedBuilder.activity_embed(
+                "search",
                 event_message("search_failure", 0, self.config.currency_name, user, guild),
+                color=COLOR_WARNING,
             )
 
         async with self.bot.get_session() as session:

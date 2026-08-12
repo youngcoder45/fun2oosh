@@ -55,6 +55,22 @@ class CooldownManager:
 cooldown_manager = CooldownManager()
 
 
+def cooldown_notice(key: str, remaining_seconds: float) -> str:
+    """Standard cooldown notice rendered with Discord timestamps.
+
+    The expiry is computed once from ``remaining_seconds`` and passed to
+    Discord as a relative (``<t:...:R>``) and an absolute (``<t:...:F>``)
+    timestamp, so the client renders "in 2 hours" and keeps it live — no
+    manual duration strings.
+    """
+    ready_at = int(time.time()) + max(0, int(remaining_seconds))
+    return (
+        f"{key.title()} cooldown active.\n"
+        f"Try again <t:{ready_at}:R>\n"
+        f"Available at <t:{ready_at}:F>"
+    )
+
+
 def check_cooldown(key: str, seconds: int):
     """Decorator that enforces a per-user cooldown on a prefix command.
 
@@ -72,10 +88,7 @@ def check_cooldown(key: str, seconds: int):
             user_id = ctx.author.id
             if cooldown_manager.is_on_cooldown(key, user_id, seconds):
                 remaining = cooldown_manager.get_remaining_time(key, user_id, seconds)
-                await ctx.send(
-                    f"Please wait **{remaining:.0f} seconds** before using "
-                    f"`{key}` again."
-                )
+                await ctx.send(cooldown_notice(key, remaining))
                 return
             cooldown_manager.set_cooldown(key, user_id)
             return await func(self, ctx, *args, **kwargs)

@@ -28,6 +28,7 @@ from models import Base, Transaction, Wallet, utcnow
 from services.guild import GuildConfigService
 from services.items import ItemService
 from utils.config import Config
+from utils.cooldowns import cooldown_notice
 from utils.migrations import run_migrations
 
 logger = logging.getLogger("fun2oosh")
@@ -140,7 +141,8 @@ class Fun2OoshBot(commands.Bot):
             await ctx.send("You don't have permission to use this command.")
             return
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"Command on cooldown. Try again in {error.retry_after:.0f}s.")
+            key = ctx.command.name if ctx.command is not None else "command"
+            await ctx.send(cooldown_notice(key, error.retry_after))
             return
 
         logger.error("Unhandled error in command '%s': %s", ctx.command, error, exc_info=error)
@@ -153,8 +155,9 @@ class Fun2OoshBot(commands.Bot):
     ) -> None:
         """Friendly error messages for slash/hybrid commands."""
         if isinstance(error, app_commands.CommandOnCooldown):
+            key = interaction.command.name if interaction.command is not None else "command"
             await interaction.response.send_message(
-                f"Command on cooldown. Try again in {error.retry_after:.0f}s.",
+                cooldown_notice(key, error.retry_after),
                 ephemeral=True,
             )
             return

@@ -15,7 +15,7 @@ from .base import Base
 class GuildConfig(Base):
     """Economy settings scoped to a Discord guild."""
 
-    __tablename__ = 'guild_config'
+    __tablename__ = "guild_config"
 
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
@@ -27,7 +27,7 @@ class GuildConfig(Base):
     collect_reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Economy rules
-    tax_rate: Mapped[float] = mapped_column(Float, default=0.0) # 0.0 – 0.5 (applied to transfers)
+    tax_rate: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 – 0.5 (applied to transfers)
     min_bet: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_bet: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     daily_wager_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -40,7 +40,7 @@ class GuildConfig(Base):
     min_account_age_days: Mapped[int] = mapped_column(Integer, default=7)
 
     # Flags
-    currency_name: Mapped[str] = mapped_column(String(16), default='coins')
+    currency_name: Mapped[str] = mapped_column(String(16), default="💎️")
 
     def __repr__(self) -> str:
         return f"<GuildConfig(guild_id={self.guild_id})>"

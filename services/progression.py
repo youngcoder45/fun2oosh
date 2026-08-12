@@ -13,7 +13,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Transaction, UserAchievement, Wallet, utcnow
+from utils.cooldowns import cooldown_notice
 from utils.economy_utils import EconomyUtils
+from utils.helpers import unix_ts
 
 from .items import ItemService
 from .locks import lock_manager
@@ -216,10 +218,10 @@ class ProgressionService:
             now = utcnow()
 
             if wallet.last_daily_at and (now - wallet.last_daily_at) < timedelta(hours=24):
-                hours_left = 24 - (now - wallet.last_daily_at).total_seconds() / 3600
+                ready_at = unix_ts(wallet.last_daily_at + timedelta(hours=24))
                 return (
                     False,
-                    f"Already claimed today. Try again in **{hours_left:.1f} hours**.",
+                    cooldown_notice("Daily reward", ready_at - unix_ts(now)),
                     0,
                     wallet.daily_streak or 0,
                 )
@@ -249,11 +251,8 @@ class ProgressionService:
             wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
             now = utcnow()
             if wallet.last_monthly_at and (now - wallet.last_monthly_at) < timedelta(days=30):
-                remaining = 30 - (now - wallet.last_monthly_at).days
-                return (
-                    False,
-                    f"Monthly reward already claimed. Try again in **{remaining} day(s)**.",
-                )
+                ready_at = unix_ts(wallet.last_monthly_at + timedelta(days=30))
+                return False, cooldown_notice("Monthly reward", ready_at - unix_ts(now))
 
             reward = int(base_reward * ProgressionService._prestige_multiplier(wallet))
             wallet.last_monthly_at = now

@@ -27,7 +27,7 @@ from bot import Fun2OoshBot
 from services.locks import lock_manager
 from utils.anti_fraud import anti_fraud as anti_fraud_instance
 from utils.config import Config
-from utils.cooldowns import cooldown_manager
+from utils.cooldowns import cooldown_manager, cooldown_notice
 from utils.economy_utils import EconomyUtils
 from utils.helpers import COLOR_INFO, responsible_gaming_notice
 
@@ -522,10 +522,7 @@ class Casino(commands.Cog):
         # Check cooldown
         if cooldown_manager.is_on_cooldown("blackjack", ctx.author.id, 10):
             remaining = cooldown_manager.get_remaining_time("blackjack", ctx.author.id, 10)
-            await ctx.send(
-                f"Please wait {remaining:.0f} seconds before playing again.",
-                ephemeral=True
-            )
+            await ctx.send(cooldown_notice("Blackjack", remaining), ephemeral=True)
             return
 
         async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:

@@ -19,7 +19,13 @@ from services.progression import ACHIEVEMENTS, AchievementService, ProgressionSe
 from utils.config import Config
 from utils.cooldowns import check_cooldown
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, EmbedBuilder, event_names, format_coins
+from utils.helpers import (
+    COLOR_ERROR,
+    COLOR_INFO,
+    EmbedBuilder,
+    event_names,
+    format_coins,
+)
 
 # activity: (success_rate, min_reward, max_reward, failure_text, tool_key, cooldown)
 ACTIVITIES = {
@@ -27,6 +33,9 @@ ACTIVITIES = {
     "fish": (0.55, 20, 150, "The fish escaped...", "fish", 45),
     "mine": (0.50, 40, 250, "The tunnel collapsed...", "mine", 60),
 }
+
+# activity key -> lowercase UnbelievaBoat-style author header
+ACTIVITY_HEADERS = {"hunt": "hunted", "fish": "fished", "mine": "mined"}
 
 SUCCESS_FALLBACKS = {
     "hunt": "You hunted down a wild animal and sold it for {amount} {currency}.",
@@ -56,6 +65,7 @@ class Activities(commands.Cog):
     async def _run_activity(self, ctx: commands.Context, key: str) -> None:
         success_rate, r_min, r_max, fail_text, tool, _cd = ACTIVITIES[key]
         user, guild = event_names(ctx.author, ctx.guild)
+        header = ACTIVITY_HEADERS[key]
         async with self.bot.get_session() as session:
             tool_mult = await ItemService.tool_multiplier(session, ctx.author.id, tool)
             reward = random.randint(r_min, r_max)
@@ -64,21 +74,24 @@ class Activities(commands.Cog):
                 final = await EconomyService.reward(
                     session, ctx.author.id, int(reward * tool_mult), key, f"{key.title()} reward"
                 )
-                embed = EmbedBuilder.success_embed(
-                    "Success!",
+                wallet = await EconomyUtils.get_wallet(session, ctx.author.id)
+                embed = EmbedBuilder.activity_embed(
+                    header,
                     event_message(
                         key, final, self.config.currency_name, user, guild,
                         fallback=SUCCESS_FALLBACKS[key],
                     ),
+                    balance=wallet.balance if wallet is not None else None,
+                    currency=self.config.currency_name,
                 )
             else:
-                embed = discord.Embed(
-                    title="No Luck",
-                    description=event_message(
+                embed = EmbedBuilder.activity_embed(
+                    header,
+                    event_message(
                         f"{key}_failure", 0, self.config.currency_name, user, guild,
                         fallback=fail_text,
                     ),
-                    color=discord.Color.red(),
+                    color=COLOR_ERROR,
                 )
 
             new = await AchievementService.check(session, ctx.author.id, key)

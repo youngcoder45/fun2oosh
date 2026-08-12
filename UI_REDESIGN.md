@@ -236,3 +236,92 @@ deposit/withdraw, balance, pay, shop, inventory.
 Add a line to a pool JSON and the next command run picks it up (cache is
 per-process; `events.reload()` clears it). Pools support both plain strings
 and objects with a `message` key for future metadata.
+
+---
+
+## 9. Discord Timestamp Cooldowns
+
+All cooldown messages across the bot render through Discord timestamps
+instead of manual duration strings (no more "try again in 23 hours").
+
+### Standard format
+
+```
+Work cooldown active.
+Try again <t:1735768800:R>
+Available at <t:1735768800:F>
+```
+
+Discord renders the first as a live-updating relative time ("in 2 hours")
+and the second as an absolute time ("January 1, 2027 5:00 PM").
+
+### Centralized implementation
+
+- `utils.cooldowns.cooldown_notice(key, remaining_seconds)` — computes the
+  expiry epoch once and emits both `:R` and `:F` timestamps. Used by:
+  - `check_cooldown` decorator (work, weekly, beg, crime, search, rob,
+    gamble, hunt, fish, mine, rep)
+  - `bot.py` prefix + slash `CommandOnCooldown` handlers (slash work/daily/
+    weekly and any `app_commands.checks.cooldown`)
+  - `cogs/casino.py` blackjack cooldown
+- `services/progression.py` daily/monthly — the DB-backed cooldowns compute
+  the expiry from the stored `last_daily_at`/`last_monthly_at` plus the
+  interval and reuse the same notice (DB already stores claim times, so no
+  schema change was needed).
+- `!collect` role-income cooldown message uses the same `<t:R>`/`<t:F>` pair.
+
+### What was removed
+
+- Manual remaining-time math (`hours_left`, `day(s)` counters) from daily /
+  monthly messages.
+- "N seconds before using X again" strings from the prefix decorator, the
+  slash error handlers, and blackjack.
+
+`format_duration` remains only for admin *configuration display* (e.g.
+`/role-income` listing "pays X every 2h") — a fixed interval, not a
+cooldown countdown.
+
+---
+
+## 10. UnbelievaBoat-Style Activity Headers
+
+Activity commands render the command as a small lowercase **author header**
+instead of an embed title, with the event narrative as the description and
+an optional trailing balance field:
+
+```
+worked
+You repaired three motorcycles and earned 142 coins.
+
+New Balance
+12,450 coins
+```
+
+### Layout
+
+- `embed.set_author(name=...)` — lowercase activity label, no title, no
+  footer.
+- Description — the generated event text (primary focus).
+- Optional `New Balance` field (uses `Config.currency_name`).
+
+### Headers
+
+| Command | Header | Outcome colors |
+|---|---|---|
+| `!work` / `/work` | worked | success green |
+| `!crime` | crime | success green / failure red |
+| `!search` | search | success green / failure yellow |
+| `!beg` | begged | success green / failure red |
+| `!hunt` | hunted | success green / failure red |
+| `!fish` | fished | success green / failure red |
+| `!mine` | mined | success green / failure red |
+| `!rob` | robbed | success green / failure red |
+
+### Implementation
+
+- `EmbedBuilder.activity_embed(header, description, *, color, balance,
+  currency)` — the single builder behind all activity embeds.
+- Balance is read from the wallet in the command's existing session (success
+  paths and the failure paths that already touch the wallet — crime, rob).
+- Daily/weekly/monthly/collect/casino embeds are unchanged (not activity
+  commands).

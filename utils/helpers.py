@@ -149,6 +149,29 @@ class EmbedBuilder:
         )
 
     @staticmethod
+    def activity_embed(
+        header: str,
+        description: str,
+        *,
+        color: int = COLOR_SUCCESS,
+        balance: Optional[int] = None,
+        currency: str = "coins",
+    ) -> discord.Embed:
+        """UnbelievaBoat-style activity embed: author header, no title.
+
+        The lowercase activity label (e.g. ``worked``) renders as a small
+        author line above the embed so the event narrative stays the primary
+        focus. ``balance`` adds a trailing "New Balance" field when provided.
+        """
+        embed = discord.Embed(description=description, color=color)
+        embed.set_author(name=header)
+        if balance is not None:
+            embed.add_field(
+                name="New Balance", value=f"**{balance:,}** {currency}", inline=False
+            )
+        return embed
+
+    @staticmethod
     def gold_embed(title: str, description: str) -> discord.Embed:
         """Gold embed for achievements and premium content."""
         return discord.Embed(

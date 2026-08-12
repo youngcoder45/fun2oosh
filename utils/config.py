@@ -15,22 +15,22 @@ class Config(BaseSettings):
     """Economy bot configuration settings."""
 
     model_config = SettingsConfigDict(
-        env_file='.env',
-        env_file_encoding='utf-8',
+        env_file=".env",
+        env_file_encoding="utf-8",
         case_sensitive=False,
-        extra='ignore',
+        extra="ignore",
     )
 
     # Core
-    discord_token: str = Field(default='demo_token')
+    discord_token: str = Field(default="demo_token")
     guild_id: Optional[int] = Field(default=None)
-    database_url: str = Field(default='sqlite+aiosqlite:///fun2oosh.db')
-    log_level: str = Field(default='INFO')
+    database_url: str = Field(default="sqlite+aiosqlite:///fun2oosh.db")
+    log_level: str = Field(default="INFO")
     owner_id: Optional[int] = Field(default=None)
-    command_prefix: str = Field(default='!')
+    command_prefix: str = Field(default="!")
 
     # Currency name used by dynamic event messages (no hardcoded symbols)
-    currency_name: str = Field(default='coins')
+    currency_name: str = Field(default="💎️")
 
     # Economy/Game settings
     min_bet: int = Field(default=10)
