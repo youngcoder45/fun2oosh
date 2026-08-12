@@ -284,39 +284,41 @@ cooldown countdown.
 
 ## 10. UnbelievaBoat-Style Activity Headers
 
-Activity commands render the command as a small lowercase **author header**
-instead of an embed title, with the event narrative as the description:
+Activity commands render the actor as a small **author header** (avatar +
+username, exactly like UnbelievaBoat's `<pfp> user76`) instead of an embed
+title, with the event narrative as the description:
 
 ```
-worked
+[pfp] Alice
 You repaired three motorcycles and earned 142 coins.
 ```
 
 ### Layout
 
-- `embed.set_author(name=...)` — lowercase activity label, no title, no
-  footer.
+- `embed.set_author(name=display_name, icon_url=avatar)` — the acting
+  user's avatar and name, no title, no footer.
 - Description — the generated event text (primary focus).
 - No balance field — activity embeds stay narrative-only (check `!balance`
   for your wallet).
 
-### Headers
+### Commands
 
-| Command | Header | Outcome colors |
-|---|---|---|
-| `!work` / `/work` | worked | success green |
-| `!crime` | crime | success green / failure red |
-| `!search` | search | success green / failure yellow |
-| `!beg` | begged | success green / failure red |
-| `!hunt` | hunted | success green / failure red |
-| `!fish` | fished | success green / failure red |
-| `!mine` | mined | success green / failure red |
-| `!rob` | robbed | success green / failure red |
+| Command | Outcome colors |
+|---|---|
+| `!work` / `/work` | success green |
+| `!crime` | success green / failure red |
+| `!search` | success green / failure yellow |
+| `!beg` | success green / failure red |
+| `!hunt` | success green / failure red |
+| `!fish` | success green / failure red |
+| `!mine` | success green / failure red |
+| `!rob` | success green / failure red |
 
 ### Implementation
 
-- `EmbedBuilder.activity_embed(header, description, *, color)` — the single
-  builder behind all activity embeds.
+- `EmbedBuilder.activity_embed(description, *, color, user)` — the single
+  builder behind all activity embeds; it derives the author name and avatar
+  from the passed user.
 - `!collect` also dropped its Balance field — the claim embed shows the
   breakdown, total earned, and next claim only.
 - Casino result embeds (e.g. coinflip) keep a New Balance field — gambling

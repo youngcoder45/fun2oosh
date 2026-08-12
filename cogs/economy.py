@@ -88,8 +88,8 @@ class Economy(commands.Cog):
         if final > 0:
             user, guild = event_names(ctx.author, ctx.guild)
             embed = EmbedBuilder.activity_embed(
-                "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
+                user=ctx.author,
             )
             await ctx.send(embed=embed)
         else:
@@ -115,8 +115,8 @@ class Economy(commands.Cog):
         if final > 0:
             user, guild = event_names(interaction.user, interaction.guild)
             embed = EmbedBuilder.activity_embed(
-                "worked",
                 event_message("work", final, self.config.currency_name, user, guild),
+                user=interaction.user,
             )
             await interaction.response.send_message(embed=embed)
         else:
@@ -618,15 +618,15 @@ class Economy(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.activity_embed(
-                "begged",
                 event_message("beg_success", reward, self.config.currency_name, user, guild),
+                user=ctx.author,
             )
             await ctx.send(embed=embed)
         else:
             embed = EmbedBuilder.activity_embed(
-                "begged",
                 event_message("beg_failure", 0, self.config.currency_name, user, guild),
                 color=COLOR_ERROR,
+                user=ctx.author,
             )
             await ctx.send(embed=embed)
 
@@ -666,8 +666,8 @@ class Economy(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.activity_embed(
-                "crime",
                 event_message("crime_success", reward, self.config.currency_name, user, guild),
+                user=ctx.author,
             )
             await ctx.send(embed=embed)
         else:
@@ -685,9 +685,9 @@ class Economy(commands.Cog):
                     loss_msg = "You were caught but had no money to pay the fine!"
 
             embed = EmbedBuilder.activity_embed(
-                "crime",
                 loss_msg,
                 color=COLOR_ERROR,
+                user=ctx.author,
             )
             await ctx.send(embed=embed)
 
@@ -753,8 +753,8 @@ class Economy(commands.Cog):
                 await session.commit()
 
                 embed = EmbedBuilder.activity_embed(
-                    "robbed",
                     f"You robbed {format_coins(rob_amount)} from {user.mention}!",
+                    user=ctx.author,
                 )
                 await ctx.send(embed=embed)
             else:
@@ -775,10 +775,10 @@ class Economy(commands.Cog):
                 await session.commit()
 
                 embed = EmbedBuilder.activity_embed(
-                    "robbed",
                     f"You were caught trying to rob {user.mention}!\n"
                     f"You lost {format_coins(fine)} and they got {format_coins(fine // 2)}!",
                     color=COLOR_ERROR,
+                    user=ctx.author,
                 )
                 await ctx.send(embed=embed)
 
@@ -966,14 +966,14 @@ class Economy(commands.Cog):
                 await session.commit()
 
             embed = EmbedBuilder.activity_embed(
-                "search",
                 event_message("search_success", reward, self.config.currency_name, user, guild),
+                user=ctx.author,
             )
         else:
             embed = EmbedBuilder.activity_embed(
-                "search",
                 event_message("search_failure", 0, self.config.currency_name, user, guild),
                 color=COLOR_WARNING,
+                user=ctx.author,
             )
 
         async with self.bot.get_session() as session:

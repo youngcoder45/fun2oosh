@@ -12,7 +12,7 @@ footers are only used when they carry information (pagination state,
 cooldown hints, contextual tips, audit references).
 """
 
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import discord
 
@@ -150,19 +150,25 @@ class EmbedBuilder:
 
     @staticmethod
     def activity_embed(
-        header: str,
         description: str,
         *,
         color: int = COLOR_SUCCESS,
+        user: Optional[Any] = None,
     ) -> discord.Embed:
-        """UnbelievaBoat-style activity embed: author header, no title.
+        """UnbelievaBoat-style activity embed: author = actor, no title.
 
-        The lowercase activity label (e.g. ``worked``) renders as a small
-        author line above the embed so the event narrative stays the primary
+        The actor's username and avatar render in the small author line above
+        the embed (``<pfp> user76``) so the event narrative stays the primary
         focus.
         """
         embed = discord.Embed(description=description, color=color)
-        embed.set_author(name=header)
+        if user is not None:
+            name = getattr(user, "display_name", None) or str(user)
+            avatar = getattr(user, "display_avatar", None)
+            if avatar is not None:
+                embed.set_author(name=name, icon_url=avatar.url)
+            else:
+                embed.set_author(name=name)
         return embed
 
     @staticmethod

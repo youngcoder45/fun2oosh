@@ -34,9 +34,6 @@ ACTIVITIES = {
     "mine": (0.50, 40, 250, "The tunnel collapsed...", "mine", 60),
 }
 
-# activity key -> lowercase UnbelievaBoat-style author header
-ACTIVITY_HEADERS = {"hunt": "hunted", "fish": "fished", "mine": "mined"}
-
 SUCCESS_FALLBACKS = {
     "hunt": "You hunted down a wild animal and sold it for {amount} {currency}.",
     "fish": "You caught a big fish and sold it for {amount} {currency}.",
@@ -65,7 +62,6 @@ class Activities(commands.Cog):
     async def _run_activity(self, ctx: commands.Context, key: str) -> None:
         success_rate, r_min, r_max, fail_text, tool, _cd = ACTIVITIES[key]
         user, guild = event_names(ctx.author, ctx.guild)
-        header = ACTIVITY_HEADERS[key]
         async with self.bot.get_session() as session:
             tool_mult = await ItemService.tool_multiplier(session, ctx.author.id, tool)
             reward = random.randint(r_min, r_max)
@@ -75,20 +71,20 @@ class Activities(commands.Cog):
                     session, ctx.author.id, int(reward * tool_mult), key, f"{key.title()} reward"
                 )
                 embed = EmbedBuilder.activity_embed(
-                    header,
                     event_message(
                         key, final, self.config.currency_name, user, guild,
                         fallback=SUCCESS_FALLBACKS[key],
                     ),
+                    user=ctx.author,
                 )
             else:
                 embed = EmbedBuilder.activity_embed(
-                    header,
                     event_message(
                         f"{key}_failure", 0, self.config.currency_name, user, guild,
                         fallback=fail_text,
                     ),
                     color=COLOR_ERROR,
+                    user=ctx.author,
                 )
 
             new = await AchievementService.check(session, ctx.author.id, key)
