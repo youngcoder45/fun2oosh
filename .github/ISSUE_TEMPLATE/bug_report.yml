@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a bug or unexpected behavior
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Before submitting, check [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md#reporting-issues).
+
+        **Security issues (economy exploits, race conditions, fraud bypasses) take priority** — mention them in the title and
+        include the full reproduction so they can be triaged first.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s) and sequence that triggered the bug.
+      placeholder: |
+        1. Run `!crime`
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the bot is affected?
+      options:
+        - Economy commands (work / crime / rob / collect / daily / weekly / monthly)
+        - Casino (blackjack / slots / roulette / coinflip / ...)
+        - Shop & inventory / trading
+        - Admin & configuration
+        - Database / migrations
+        - Bot startup / gateway / intents
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Bot version / commit
+      description: Paste the commit hash or version you are running (see `git log --oneline -1`).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste the full traceback or log lines. If none, write "none".
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and database in use (SQLite/PostgreSQL).
+      placeholder: |
+        OS: ...
+        Python: ...
+        Database: sqlite+aiosqlite:///fun2oosh.db
+    validations:
+      required: true
+  - type: checkboxes
+    id: priority
+    attributes:
+      label: Severity
+      options:
+        - label: Security / economy exploit (e.g. double-spend, race condition, cooldown bypass)
+        - label: Data loss or corruption
+        - label: Command broken for all users
+        - label: Cosmetic / minor

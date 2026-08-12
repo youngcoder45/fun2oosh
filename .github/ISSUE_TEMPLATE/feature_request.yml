@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a new feature or improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Before submitting, check the existing docs
+        ([README](../../blob/main/README.md), [AUDIT.md](../../blob/main/AUDIT.md),
+        [UI_REDESIGN.md](../../blob/main/UI_REDESIGN.md)) to make sure it isn't already
+        planned, and [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md) if you intend to implement it.
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem / motivation
+      description: What gap does this fill, or what pain point does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature as concretely as possible — commands, embeds, UI, behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the bot does this touch?
+      options:
+        - Economy commands
+        - Casino games
+        - Shop & inventory / trading
+        - Admin & configuration
+        - UI / embeds / design system
+        - Database / migrations
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or different approaches you've thought about.
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      options:
+        - label: I intend to open a pull request for this
+        - label: I'd like help scoping this feature first
+  - type: markdown
+    attributes:
+      value: |
+        New commands, event narratives, and DB columns follow the extension
+        guides in [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md).
