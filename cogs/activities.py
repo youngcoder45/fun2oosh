@@ -261,13 +261,13 @@ class Activities(commands.Cog):
         embed = discord.Embed(
             title=f"{target.display_name}'s Achievements",
             description=f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked",
-            color=discord.Color.gold(),
+            color=discord.Color.default(),
         )
         for aid, meta in ACHIEVEMENTS.items():
             done = aid in unlocked
             embed.add_field(
                 name=f"{EMOJI_UNLOCK if done else EMOJI_LOCK} {meta['name']}",
-                value=f"{meta['desc']}" if done else f"{EMOJI_LOCK} Locked - {meta['desc']}",
+                value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
                 inline=False,
             )
         await ctx.send(embed=embed)

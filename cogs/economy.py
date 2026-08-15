@@ -211,11 +211,16 @@ class Economy(commands.Cog):
                     session, ctx.author.id, ctx.guild.id, payouts
                 )
         if earned <= 0:
-            return await ctx.send(
-                f"All your income roles are on cooldown.\n"
-                f"Try again <t:{next_ts}:R>\n"
-                f"Available at <t:{next_ts}:F>"
+            embed = discord.Embed(
+                description=(
+                    f"<:redtick:1529045360742502481> All your income roles are on cooldown.\n"
+                    f"Try again <t:{next_ts}:R>\n"
+                    f"Available at <t:{next_ts}:F>"
+                ),
+                color=COLOR_ERROR,
             )
+            EmbedBuilder.set_author_from_user(embed, ctx.author)
+            return await ctx.send(embed=embed)
         embed = self._collect_embed(breakdown, ctx.author)
         await ctx.send(embed=embed)
 
@@ -243,12 +248,16 @@ class Economy(commands.Cog):
                     session, interaction.user.id, interaction.guild.id, payouts
                 )
         if earned <= 0:
-            return await interaction.response.send_message(
-                f"All your income roles are on cooldown.\n"
-                f"Try again <t:{next_ts}:R>\n"
-                f"Available at <t:{next_ts}:F>",
-                ephemeral=True,
+            embed = discord.Embed(
+                description=(
+                    f"<:redtick:1529045360742502481> All your income roles are on cooldown.\n"
+                    f"Try again <t:{next_ts}:R>\n"
+                    f"Available at <t:{next_ts}:F>"
+                ),
+                color=COLOR_ERROR,
             )
+            EmbedBuilder.set_author_from_user(embed, interaction.user)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         embed = self._collect_embed(breakdown, interaction.user)
         await interaction.response.send_message(embed=embed)
 
@@ -1358,7 +1367,10 @@ class Economy(commands.Cog):
             for i, (_source, earned, role_id) in enumerate(breakdown, start=1)
         )
         embed = discord.Embed(
-            description=f"Role income successfully collected!\n{lines}",
+            description=(
+                f"<:greentick:1529045309081256026> Role income successfully collected!\n"
+                f"{lines}"
+            ),
             color=COLOR_SUCCESS,
         )
         EmbedBuilder.set_author_from_user(embed, user)
