@@ -18,7 +18,12 @@ from services.locks import lock_manager
 from services.progression import AchievementService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins, format_template
+from utils.helpers import (
+    COLOR_INFO,
+    EmbedBuilder,
+    format_coins,
+    render_item_message,
+)
 from utils.pagination import PaginationView
 
 RARITY_COLORS = {
@@ -153,7 +158,7 @@ class TradeOfferView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
 
-    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.secondary)
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.offer.partner:
             return await interaction.response.send_message(
@@ -169,7 +174,7 @@ class TradeOfferView(discord.ui.View):
             f"`!trade <@{self.offer.initiator}> <item> <qty>` to complete the exchange.",
         )
 
-    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.secondary)
     async def decline_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.offer.partner:
             return await interaction.response.send_message(
@@ -320,7 +325,7 @@ class Shop(commands.Cog):
                 )
                 if item.bought_message:
                     description = (
-                        format_template(
+                        render_item_message(
                             item.bought_message,
                             item=item.name,
                             qty=qty,
@@ -382,11 +387,14 @@ class Shop(commands.Cog):
             if not ok:
                 return await ctx.send(msg)
             if item.used_message:
-                msg = format_template(
-                    item.used_message,
-                    item=item.name,
-                    user=ctx.author.display_name,
-                ) or msg
+                msg = (
+                    render_item_message(
+                        item.used_message,
+                        item=item.name,
+                        user=ctx.author.display_name,
+                    )
+                    or msg
+                )
             embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
@@ -458,12 +466,14 @@ class Shop(commands.Cog):
             description = f"You gave **{item.name}** x{qty} to {user.mention}."
             if item.gave_message:
                 description = (
-                    format_template(
+                    render_item_message(
                         item.gave_message,
                         item=item.name,
                         qty=qty,
                         user=user.display_name,
                         sender=ctx.author.display_name,
+                        user_mention=user.mention,
+                        sender_mention=ctx.author.mention,
                     )
                     or description
                 )

@@ -60,7 +60,7 @@ class ProfileView(discord.ui.View):
         embed = await self.cog.profile_embed(self.target, tab)
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="Overview", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Overview", style=discord.ButtonStyle.secondary)
     async def overview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._render(interaction, "overview")
 
@@ -96,6 +96,18 @@ class Economy(commands.Cog):
         """Called when the cog is loaded."""
         pass
 
+    @staticmethod
+    async def _wallet_rank(session, total: int) -> int:
+        """1-based leaderboard rank: wallets strictly richer than ``total`` + 1."""
+        ahead = (
+            await session.execute(
+                select(func.count(Wallet.user_id)).where(
+                    (Wallet.balance + Wallet.bank) > total
+                )
+            )
+        ).scalar() or 0
+        return int(ahead) + 1
+
     @commands.command(name="balance", aliases=["bal", "wallet"])
     async def balance(self, ctx: commands.Context, user: Optional[discord.User] = None):
         """Check your or another user's balance."""
@@ -104,8 +116,10 @@ class Economy(commands.Cog):
         async with self.bot.get_session() as session:
             wallet = await EconomyUtils.get_or_create_wallet(session, target_user.id)
             await session.commit()  # Ensure wallet is saved
+            total = (wallet.balance or 0) + (wallet.bank or 0)
+            rank = await self._wallet_rank(session, total)
 
-        embed = EmbedBuilder.wallet_embed(target_user, wallet.balance, wallet.bank)
+        embed = EmbedBuilder.wallet_embed(target_user, wallet.balance, wallet.bank, rank=rank)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="balance", description="Check your balance")
@@ -114,8 +128,10 @@ class Economy(commands.Cog):
         async with self.bot.get_session() as session:
             wallet = await EconomyUtils.get_or_create_wallet(session, interaction.user.id)
             await session.commit()  # Ensure wallet is saved
+            total = (wallet.balance or 0) + (wallet.bank or 0)
+            rank = await self._wallet_rank(session, total)
 
-        embed = EmbedBuilder.wallet_embed(interaction.user, wallet.balance, wallet.bank)
+        embed = EmbedBuilder.wallet_embed(interaction.user, wallet.balance, wallet.bank, rank=rank)
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="work")
@@ -883,21 +899,29 @@ class Economy(commands.Cog):
                     )
                 )
                 await session.commit()
-
-                embed = EmbedBuilder.success_embed(
-                    "Gamble Result",
-                    f"You won **{format_coins(payout)}** (profit **+{format_coins(amount)}**).",
-                )
             else:
                 await session.commit()
 
-                embed = EmbedBuilder.error_embed(
-                    "Gamble Result",
-                    f"You lost **{format_coins(amount)}**.",
+            # Gambling result card: author line, OUTCOME + BALANCE sections.
+            outcome_block = "```diff\n+ WIN\n```" if won else "```diff\n- LOSS\n```"
+            if won:
+                result_lines = (
+                    f"Payout: {format_coins(payout)}\nProfit: +{format_coins(amount)}"
                 )
+            else:
+                result_lines = f"Payout: {format_coins(0)}\nLoss: -{format_coins(amount)}"
 
+            embed = discord.Embed(color=COLOR_SUCCESS if won else COLOR_ERROR)
+            EmbedBuilder.set_author_from_user(embed, ctx.author)
             embed.add_field(
-                name="Balance", value=f"**{wallet.balance or 0:,}** coins", inline=False
+                name="OUTCOME",
+                value=f"{outcome_block}\n{result_lines}",
+                inline=False,
+            )
+            embed.add_field(
+                name="BALANCE",
+                value=f"```\n{wallet.balance:,} 💎️\n```",
+                inline=False,
             )
             await ctx.send(embed=embed)
 
@@ -1135,7 +1159,7 @@ class Economy(commands.Cog):
                     sign = "+" if tx.amount >= 0 else ""
                     lines.append(
                         f"**{tx.type}** {sign}{tx.amount:,} • "
-                        f"*{tx.timestamp:%Y-%m-%d %H:%M} UTC*"
+                        f"*<t:{unix_ts(tx.timestamp)}:R>*"
                     )
                 embed.description = "\n".join(lines)
             embed.set_footer(text=f"{tx_count} total transactions")
@@ -1216,7 +1240,7 @@ class Economy(commands.Cog):
                 sign = "+" if tx.amount >= 0 else ""
                 embed.add_field(
                     name=f"{tx.type} • {sign}{tx.amount:,}",
-                    value=f"{tx.description or '—'}\n*{tx.timestamp:%Y-%m-%d %H:%M} UTC*",
+                    value=f"{tx.description or '—'}\n*<t:{unix_ts(tx.timestamp)}:R>*",
                     inline=False,
                 )
             embed.set_footer(text=f"Page {start // per_page + 1}/{(len(txs) - 1) // per_page + 1}")
@@ -1259,15 +1283,16 @@ class Economy(commands.Cog):
 
     async def _resolve_collect(
         self, session, user_id: int, guild_id: int, payouts
-    ) -> Tuple[int, List[Tuple[str, int]], int]:
+    ) -> Tuple[int, List[Tuple[str, int, int]], int]:
         """Claim every ready income role, atomically, under the caller's lock.
 
-        Returns ``(earned, breakdown, next_ts)``. ``earned`` is 0 when
-        every role is on cooldown; ``next_ts`` is the epoch of the earliest
-        role that will become claimable again.
+        Returns ``(earned, breakdown, next_ts)`` — breakdown entries are
+        ``(role_name, earned, role_id)`` so the embed can render mentions.
+        ``earned`` is 0 when every role is on cooldown; ``next_ts`` is the
+        epoch of the earliest role that will become claimable again.
         """
         earned = 0
-        breakdown: List[Tuple[str, int]] = []
+        breakdown: List[Tuple[str, int, int]] = []
         ready = []
         next_waits = []
         for amount, source, role_id, interval in payouts:
@@ -1287,7 +1312,7 @@ class Economy(commands.Cog):
         for amount, source, role_id, interval in ready:
             final = int(amount * booster_manager.get_multiplier(user_id))
             earned += final
-            breakdown.append((source, final))
+            breakdown.append((source, final, role_id))
             wallet.balance += final
             session.add(
                 Transaction(
@@ -1325,12 +1350,12 @@ class Economy(commands.Cog):
 
     @staticmethod
     def _collect_embed(
-        breakdown: List[Tuple[str, int]], user
+        breakdown: List[Tuple[str, int, int]], user
     ) -> discord.Embed:
         """UnbelievaBoat-style role-income embed: success line + numbered roles."""
         lines = "\n".join(
-            f"{i} - @{source} {earned:,} (coins)"
-            for i, (source, earned) in enumerate(breakdown, start=1)
+            f"{i} - <@&{role_id}> {earned:,} (coins)"
+            for i, (_source, earned, role_id) in enumerate(breakdown, start=1)
         )
         embed = discord.Embed(
             description=f"Role income successfully collected!\n{lines}",

@@ -8,6 +8,7 @@ parsing. Run with:
 """
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -18,11 +19,16 @@ _DB = Path("test_config_run.db")
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_DB}")
 
 from bot import Fun2OoshBot  # noqa: E402
-from cogs.casino import parse_roulette_bet  # noqa: E402
+from cogs.casino import (  # noqa: E402
+    RED_NUMBERS,
+    parse_roulette_bet,
+    roulette_color_of,
+    roulette_outcome,
+)
 from models import Base  # noqa: E402
 from services.items import ItemService  # noqa: E402
 from utils.config import Config  # noqa: E402
-from utils.helpers import format_template  # noqa: E402
+from utils.helpers import format_template, render_item_message  # noqa: E402
 from utils.migrations import run_migrations  # noqa: E402
 from utils.runtime_config import activity, fine_amount, items, reload  # noqa: E402
 
@@ -63,6 +69,13 @@ async def main() -> None:
             gift = await ItemService.get(session, "gift_card")
             assert gift is not None
             assert gift.bought_message and gift.used_message and gift.gave_message
+            rose = await ItemService.get(session, "rose")
+            assert rose is not None
+            assert rose.consumable and rose.giveable and not rose.limited
+            assert rose.bought_message is not None
+            assert "Whom are you gonna give it to" in rose.bought_message
+            assert rose.used_message is not None and rose.used_message.startswith("[")
+            assert rose.gave_message is not None and rose.gave_message.startswith("[")
             print("OK item sync (idempotent, custom messages + giveable)")
 
         # 4. message templates fill known placeholders, keep unknown ones
@@ -74,7 +87,35 @@ async def main() -> None:
         assert format_template(None, user="Bob") is None
         print("OK format_template")
 
-        # 5. roulette bet parsing (new !roulette <amount> <bet> signature)
+        # 5. random message sets: list templates pick one entry per render
+        async with bot.session_factory() as session:
+            rose = await ItemService.get(session, "rose")
+        assert rose is not None
+        assert rose.used_message is not None and rose.gave_message is not None
+        used_choices = json.loads(rose.used_message)
+        gave_choices = json.loads(rose.gave_message)
+        expected_used = {format_template(c, item="Rose") for c in used_choices}
+        expected_gave = {format_template(c, sender="aditya", user="priya") for c in gave_choices}
+        used_rendered = {
+            m for m in (render_item_message(rose.used_message, item="Rose") for _ in range(200)) if m
+        }
+        assert used_rendered and used_rendered <= expected_used, used_rendered
+        gave_rendered = {
+            m
+            for m in (
+                render_item_message(rose.gave_message, sender="aditya", user="priya")
+                for _ in range(200)
+            )
+            if m
+        }
+        assert gave_rendered and gave_rendered <= expected_gave, gave_rendered
+        assert all("aditya" in m and "priya" in m for m in gave_rendered), gave_rendered
+        single = render_item_message("You bought {item}.", item="Rose")
+        assert single == "You bought Rose.", single
+        assert render_item_message(None, item="x") is None
+        print("OK random message sets (used/gave)")
+
+        # 6. roulette bet parsing (new !roulette <amount> <bet> signature)
         assert parse_roulette_bet("red") == ("red", None)
         assert parse_roulette_bet("R") == ("red", None)
         assert parse_roulette_bet("black") == ("black", None)
@@ -90,6 +131,22 @@ async def main() -> None:
         assert parse_roulette_bet("37") == (None, None)
         assert parse_roulette_bet("banana") == (None, None)
         print("OK roulette bet parsing")
+
+        # 7. roulette outcome evaluation (17 is black in real roulette)
+        assert len(RED_NUMBERS) == 18
+        assert roulette_outcome(17, "black", None) == (True, 2)
+        assert roulette_outcome(17, "red", None) == (False, 0)
+        assert roulette_outcome(17, "odd", None) == (True, 2)
+        assert roulette_outcome(2, "even", None) == (True, 2)
+        assert roulette_outcome(5, "low", None) == (True, 2)
+        assert roulette_outcome(30, "high", None) == (True, 2)
+        assert roulette_outcome(17, "number", 17) == (True, 36)
+        assert roulette_outcome(0, "number", 0) == (True, 36)
+        assert roulette_outcome(0, "red", None) == (False, 0)
+        assert roulette_color_of(0) == "Green"
+        assert roulette_color_of(17) == "Black"
+        assert roulette_color_of(1) == "Red"
+        print("OK roulette outcomes (colors, 36x numbers, 0/green)")
 
         print("ALL CONFIG TESTS PASSED")
     finally:

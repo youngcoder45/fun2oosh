@@ -35,6 +35,9 @@ Documentation:
 - `!crash`, `!russianroulette`, `!war`, `!baccarat`, `!hilo`, `!keno`
 - Roulette bets: `!roulette 100 red`, `!roulette 100 even`, `!roulette 100 1-18`,
   `!roulette 100 19-36`, `!roulette 100 0` (numbers 0-36, colors, odd/even, ranges)
+- Roulette is a **shared table**: the round stays open for 15s after the last bet
+  (max 1 minute), so everyone in the channel can join before the wheel spins;
+  a separate result embed shows the winning number and a winners/losers summary
 
 ### Admin (`cogs/admin_economy.py`)
 - `!add-money <user> <amount> [cash|bank]`, `!reset_economy CONFIRM`
@@ -111,8 +114,27 @@ There are two layers of configuration:
 | `activities.beg` | success rate, reward range, cooldown |
 | `shop.items` | the full item catalog — id, name, description, price, sell price, category, rarity, `stackable`, **`giveable`**, `consumable`, custom **`bought_message` / `used_message` / `gave_message`**, and `effects` (use actions: random money like a gift card, role grants, boosters, crates, tool multipliers) |
 
-Item message templates support `{item}`, `{qty}`, `{amount}`, `{user}`, and
-`{sender}` placeholders. Item use effects live in `effects`:
+`bought_message` / `used_message` / `gave_message` accept **one string or an
+array of strings** — an array picks a random line every time the event
+happens (e.g. five different "you used the rose…" messages). Message
+placeholders: `{item}`, `{qty}`, `{amount}`, `{user}`, `{sender}`, and
+`{user_mention}` / `{sender_mention}` for `gave_message`.
+
+```jsonc
+"bought_message": "You bought {item}. Whom are you gonna give it to? 👀",
+"used_message": [
+  "You used the rose to make a bouquet.",
+  "You sniffed the rose and it smells amazing."
+],
+"gave_message": [
+  "{sender} just gave {user} a rose.",
+  "{sender} tossed {user} a rose."
+]
+```
+
+A consumable item with **no `effects`** is a flavor item — `!use` simply
+consumes it and shows the random `used_message`. Item use effects live in
+`effects`:
 
 ```jsonc
 // Grant a role when the item is used (by name — per guild — or numeric id)

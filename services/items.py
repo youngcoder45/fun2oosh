@@ -25,6 +25,20 @@ from .locks import lock_manager
 logger = logging.getLogger(__name__)
 
 
+def _message_field(value) -> Optional[str]:
+    """Normalize a config message field for storage.
+
+    Single strings pass through; lists of strings (random message sets) are
+    stored as JSON so every entry survives into the database. ``None`` stays
+    ``None``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return json.dumps([entry for entry in value if isinstance(entry, str)])
+    return value
+
+
 class BoosterManager:
     """In-memory money boosters (lost on restart -> acceptable for v1)."""
 
@@ -100,9 +114,9 @@ class ItemService:
                 max_stack=row.get("max_stack", 99),
                 expires_in=row.get("expires_in"),
                 effects=json.dumps(row["effects"]) if row.get("effects") else None,
-                bought_message=row.get("bought_message"),
-                used_message=row.get("used_message"),
-                gave_message=row.get("gave_message"),
+                bought_message=_message_field(row.get("bought_message")),
+                used_message=_message_field(row.get("used_message")),
+                gave_message=_message_field(row.get("gave_message")),
             )
             existing = await ItemService.get(session, item_id)
             if existing is not None:
@@ -312,6 +326,11 @@ class ItemService:
 
             elif "crate" in effects:
                 msg = await ItemService._open_crate_raw(session, user_id, item, effects)
+
+            elif not effects:
+                # Flavor item: no mechanical effect, just consume it. The
+                # command layer replaces this with the item's used_message.
+                msg = f"You used **{item.name}**."
 
             else:
                 return False, "This item has no usable effect."

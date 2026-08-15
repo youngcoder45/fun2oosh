@@ -33,6 +33,9 @@ from utils.helpers import (
 )
 from utils.runtime_config import activity as activity_config
 
+EMOJI_UNLOCK = "<:unlock:1538264274353393674>"
+EMOJI_LOCK = "<:lock:1538264325914103938>"
+
 # Built-in fallbacks, used only when data/config.json is missing a key.
 ACTIVITY_DEFAULTS: Dict[str, dict] = {
     "hunt": {
@@ -263,8 +266,8 @@ class Activities(commands.Cog):
         for aid, meta in ACHIEVEMENTS.items():
             done = aid in unlocked
             embed.add_field(
-                name=f"{'UNLOCKED' if done else 'LOCKED'} {meta['name']}",
-                value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
+                name=f"{EMOJI_UNLOCK if done else EMOJI_LOCK} {meta['name']}",
+                value=f"{meta['desc']}" if done else f"{EMOJI_LOCK} Locked - {meta['desc']}",
                 inline=False,
             )
         await ctx.send(embed=embed)

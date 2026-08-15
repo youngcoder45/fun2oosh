@@ -40,6 +40,11 @@ A unified embed design system now lives in `utils/helpers.py`:
 Inventory), gold accent on totals, paginated leaderboard with page footers,
 profile without decorative clutter.
 
+`!balance` is an UnbelievaBoat-style wallet card: no title, no footer, the
+user's display name + avatar as the author line, a right-side thumbnail for
+branding, and a compact description — `Leaderboard Rank: #<rank>` followed by
+`Cash` / `Bank` / `Total` lines.
+
 **shop.py** (`!shop`, `!iteminfo`, `!inventory`, `!buy`, `!sell`, `!use`,
 `!giveitem`, `!trade`): rarity-colored item embeds, "Stackable / Usable /
 Category / Rarity / Price / Sell Price" field layout, paginated catalog and

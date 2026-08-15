@@ -58,7 +58,7 @@ class ConfirmView(discord.ui.View):
             child.disabled = True  # type: ignore[attr-defined]
         self.stop()
 
-    @discord.ui.button(label="Confirm Reset", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Confirm Reset", style=discord.ButtonStyle.secondary)
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         self._finish()

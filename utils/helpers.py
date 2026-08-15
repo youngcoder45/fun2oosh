@@ -12,6 +12,8 @@ footers are only used when they carry information (pagination state,
 cooldown hints, contextual tips, audit references).
 """
 
+import json
+import random
 import string
 from typing import Any, List, Optional, Tuple
 
@@ -135,6 +137,31 @@ def format_template(template: Optional[str], **values: Any) -> Optional[str]:
     return _template_formatter.vformat(template, (), values)
 
 
+def render_item_message(template: Optional[str], **values: Any) -> Optional[str]:
+    """Render an item message that may be a single string or a JSON list.
+
+    Config.json message fields (``bought_message``, ``used_message``,
+    ``gave_message``) accept either one string or an array of strings; a list
+    is stored as JSON and picks one entry at random on every render, e.g. a
+    few random "used the rose..." lines. ``values`` are filled as
+    ``{placeholders}`` via :func:`format_template`.
+    """
+    if not template:
+        return None
+    candidate = template
+    if template.lstrip().startswith("["):
+        try:
+            parsed = json.loads(template)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            choices = [entry for entry in parsed if isinstance(entry, str) and entry]
+            if not choices:
+                return None
+            candidate = random.choice(choices)
+    return format_template(candidate, **values)
+
+
 class EmbedBuilder:
     """Factory helpers for consistent embed styling across the bot."""
 
@@ -212,20 +239,42 @@ class EmbedBuilder:
         )
 
     @staticmethod
-    def wallet_embed(user, balance: int, bank: int) -> discord.Embed:
-        """Wallet overview embed for a user."""
+    def wallet_embed(
+        user,
+        balance: int,
+        bank: int,
+        rank: Optional[int] = None,
+    ) -> discord.Embed:
+        """UnbelievaBoat-style wallet card: author line, no title, no footer.
+
+        The author line carries the user's display name and avatar; the
+        thumbnail on the right is kept for branding. The description is a
+        compact cash/bank/total breakdown with an optional leaderboard rank::
+
+            Leaderboard Rank: #1
+
+            Cash: 14,696 💎️
+            Bank: 8,270 💎️
+            Total: 22,966 💎️
+        """
         total = (balance or 0) + (bank or 0)
         name = getattr(user, "display_name", None) or str(user)
-        embed = discord.Embed(
-            title=f"{name}'s Wallet",
-            color=COLOR_INFO,
-        )
-        thumbnail = getattr(user, "display_avatar", None)
-        if thumbnail is not None:
-            embed.set_thumbnail(url=thumbnail.url)
-        embed.add_field(name="Wallet", value=f"**{balance or 0:,}** 💎️", inline=True)
-        embed.add_field(name="Bank", value=f"**{bank or 0:,}** 💎️", inline=True)
-        embed.add_field(name="Total", value=f"**{total:,}** 💎️", inline=True)
+        avatar = getattr(user, "display_avatar", None)
+        embed = discord.Embed(color=COLOR_INFO)
+        if avatar is not None:
+            embed.set_author(name=name, icon_url=avatar.url)
+            embed.set_thumbnail(url=avatar.url)
+        else:
+            embed.set_author(name=name)
+
+        lines = []
+        if rank is not None:
+            lines.append(f"Leaderboard Rank: #{rank}")
+            lines.append("")
+        lines.append(f"Cash: {format_coins(balance)}")
+        lines.append(f"Bank: {format_coins(bank)}")
+        lines.append(f"Total: {format_coins(total)}")
+        embed.description = "\n".join(lines)
         return embed
 
     @staticmethod

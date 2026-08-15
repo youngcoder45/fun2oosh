@@ -323,9 +323,25 @@
         "rarity": "common",
         "stackable": true,
         "giveable": true,
-        "consumable": false,
-        "limited": true,
-        "max_stack": 99
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "bought_message": "You bought {item}. Whom are you gonna give it to? 👀",
+        "used_message": [
+          "You used the rose to make a bouquet.",
+          "You sniffed the rose and it smells amazing.",
+          "You pressed the rose into your favorite book.",
+          "You turned the rose into a tiny crown.",
+          "You gave the rose a dramatic speech before keeping it.",
+          "You used the rose to ask the mirror on a date."
+        ],
+        "gave_message": [
+          "{sender} just gave {user} a rose.",
+          "{sender} handed {user} a beautiful rose.",
+          "A rose from {sender} to {user} — how romantic!",
+          "{sender} tossed {user} a rose.",
+          "{sender} gifted {user} a rose, and someone blushed."
+        ]
       },
       {
         "id": "boombox",

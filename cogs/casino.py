@@ -16,14 +16,16 @@ Features:
 
 import asyncio
 import random
+import time
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from bot import Fun2OoshBot
+from models import Transaction
 from services.locks import lock_manager
 from utils.anti_fraud import anti_fraud as anti_fraud_instance
 from utils.config import Config
@@ -33,6 +35,8 @@ from utils.helpers import (
     COLOR_ERROR,
     COLOR_INFO,
     COLOR_SUCCESS,
+    EmbedBuilder,
+    format_coins,
     responsible_gaming_notice,
 )
 
@@ -153,7 +157,7 @@ class BlackjackView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Hit", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Hit", style=discord.ButtonStyle.secondary)
     async def hit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Hit button - draw another card."""
         await interaction.response.defer()
@@ -165,7 +169,7 @@ class BlackjackView(discord.ui.View):
         await interaction.response.defer()
         await self.game.stand(interaction)
 
-    @discord.ui.button(label="Double Down", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Double Down", style=discord.ButtonStyle.secondary)
     async def double_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Double down - double bet and get one more card."""
         await interaction.response.defer()
@@ -422,6 +426,101 @@ def parse_roulette_bet(bet: str) -> Tuple[Optional[str], Optional[int]]:
     return None, None
 
 
+ROULETTE_GREEN = 0x1E8449  # betting-phase color (roulette table green)
+
+RED_NUMBERS = frozenset({1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36})
+
+
+def roulette_color_of(number: int) -> str:
+    """Wheel color for a result number: Green / Red / Black."""
+    if number == 0:
+        return "Green"
+    return "Red" if number in RED_NUMBERS else "Black"
+
+
+def roulette_bet_label(bet_type: str, number: Optional[int]) -> str:
+    """Human label for a parsed bet, e.g. ``red`` -> ``Red``, ``17`` -> ``17``."""
+    return {
+        "red": "Red",
+        "black": "Black",
+        "odd": "Odd",
+        "even": "Even",
+        "low": "Low (1-18)",
+        "high": "High (19-36)",
+    }.get(bet_type, f"{number}")
+
+
+def roulette_outcome(result_number: int, bet_type: str, number: Optional[int]) -> Tuple[bool, int]:
+    """Evaluate one bet against the winning number.
+
+    Returns ``(won, multiplier)`` — 36x for a straight number, 2x for
+    colors/odd/even/ranges.
+    """
+    red = result_number in RED_NUMBERS
+    black = result_number != 0 and not red
+    odd = result_number % 2 == 1 and result_number != 0
+    even = result_number % 2 == 0 and result_number != 0
+    low = 1 <= result_number <= 18
+    high = 19 <= result_number <= 36
+
+    if bet_type == "number" and number is not None and result_number == number:
+        return True, 36  # 35:1 payout + original bet
+    if bet_type == "red" and red:
+        return True, 2
+    if bet_type == "black" and black:
+        return True, 2
+    if bet_type == "odd" and odd:
+        return True, 2
+    if bet_type == "even" and even:
+        return True, 2
+    if bet_type == "low" and low:
+        return True, 2
+    if bet_type == "high" and high:
+        return True, 2
+    return False, 0
+
+
+class RouletteBet:
+    """One bet placed on a roulette round."""
+
+    __slots__ = ("user", "amount", "bet_type", "number")
+
+    def __init__(
+        self,
+        user,
+        amount: int,
+        bet_type: str,
+        number: Optional[int],
+    ):
+        self.user = user
+        self.amount = amount
+        self.bet_type = bet_type
+        self.number = number
+
+
+class RouletteGame:
+    """A single roulette round: players place bets until the wheel spins.
+
+    The wheel spins ``IDLE_SECONDS`` after the last bet, capped at
+    ``MAX_SECONDS`` after the round started. Bets are keyed by user id so a
+    player can place several bets in one round.
+    """
+
+    IDLE_SECONDS = 15
+    MAX_SECONDS = 60
+
+    def __init__(self, channel_id: int, starter):
+        self.channel_id = channel_id
+        self.starter = starter
+        self.message: Optional[discord.Message] = None
+        self.task: Optional[asyncio.Task] = None
+        self.bets: Dict[int, List[RouletteBet]] = {}
+        self.lock = asyncio.Lock()
+        self.closed = False
+        self.started_at = time.monotonic()
+        self.last_bet_at = time.monotonic()
+
+
 class SlotMachine:
     """Slot machine game logic."""
 
@@ -485,6 +584,7 @@ class Casino(commands.Cog):
         self.bot = bot
         self.config = config
         self.active_games: Dict[int, BlackjackGame] = {}
+        self.roulette_games: Dict[int, RouletteGame] = {}
 
     async def check_bet_limits(self, user_id: int, bet: int, session) -> Tuple[bool, Optional[str]]:
         """Check if bet is within limits."""
@@ -545,7 +645,7 @@ class Casino(commands.Cog):
     @commands.hybrid_command(
         name="roulette",
         aliases=["rl"],
-        description="Play roulette! e.g. !roulette 100 red, !roulette 100 17",
+        description="Play roulette! Round closes 15s after the last bet (max 1 min)",
     )
     @app_commands.describe(
         amount="Amount to bet",
@@ -554,8 +654,10 @@ class Casino(commands.Cog):
     async def roulette(self, ctx: commands.Context, amount: int, bet: str):
         """European roulette — `!roulette <amount> <bet>`.
 
-        Bets: red, black, odd, even, low (1-18), high (19-36), or a number
-        0-36. Numbers pay 36x, everything else 2x.
+        A round stays open for 15 seconds after the last bet (max 1 minute);
+        everyone in the channel can join before the wheel spins. Bets:
+        red, black, odd, even, low (1-18), high (19-36), or a number 0-36.
+        Numbers pay 36x, everything else 2x.
         """
         bet_type, number = parse_roulette_bet(bet)
         if bet_type is None:
@@ -564,97 +666,193 @@ class Casino(commands.Cog):
                 "low (1-18), or high (19-36). Example: `!roulette 100 red`",
                 ephemeral=True,
             )
+        if ctx.guild is None:
+            return await ctx.send("Roulette only works in servers.", ephemeral=True)
 
+        # Deduct the bet now; payouts are credited when the wheel spins.
         async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
-            # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, amount, session)
             if not valid:
                 await ctx.send(error, ephemeral=True)
                 return
-
-            # Deduct bet
             wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             wallet.balance -= amount
+            session.add(
+                Transaction(
+                    user_id=ctx.author.id,
+                    type="roulette",
+                    amount=-amount,
+                    description=f"Roulette bet on {roulette_bet_label(bet_type, number)}",
+                )
+            )
             await session.commit()
 
-            # Spin the wheel
-            result_number = random.randint(0, 36)
+        if ctx.interaction is not None:
+            await ctx.defer()
 
-            # Red numbers in roulette
-            red_numbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
-            is_red = result_number in red_numbers
-            is_black = result_number != 0 and not is_red
-            is_odd = result_number % 2 == 1 and result_number != 0
-            is_even = result_number % 2 == 0 and result_number != 0
-            is_low = 1 <= result_number <= 18
-            is_high = 19 <= result_number <= 36
+        # Join an open round in this channel, or start a new one.
+        game = self.roulette_games.get(ctx.channel.id)
+        if game is not None and not game.closed:
+            async with game.lock:
+                if not game.closed:
+                    game.bets.setdefault(ctx.author.id, []).append(
+                        RouletteBet(ctx.author, amount, bet_type, number)
+                    )
+                    game.last_bet_at = time.monotonic()
+            if game.message is not None:
+                try:
+                    await game.message.edit(embed=self._roulette_bet_embed(game))
+                except discord.HTTPException:
+                    pass
+            await ctx.send("☑ Bet added to the round!", ephemeral=True)
+            return
 
-            # Determine win
-            won = False
-            multiplier = 0
-            if bet_type == "number" and number is not None and result_number == number:
-                won, multiplier = True, 36  # 35:1 payout + original bet
-            elif bet_type == "red" and is_red:
-                won, multiplier = True, 2
-            elif bet_type == "black" and is_black:
-                won, multiplier = True, 2
-            elif bet_type == "odd" and is_odd:
-                won, multiplier = True, 2
-            elif bet_type == "even" and is_even:
-                won, multiplier = True, 2
-            elif bet_type == "low" and is_low:
-                won, multiplier = True, 2
-            elif bet_type == "high" and is_high:
-                won, multiplier = True, 2
+        game = RouletteGame(ctx.channel.id, ctx.author)
+        game.bets[ctx.author.id] = [RouletteBet(ctx.author, amount, bet_type, number)]
+        self.roulette_games[ctx.channel.id] = game
+        message = await ctx.send(embed=self._roulette_bet_embed(game))
+        game.message = message if isinstance(message, discord.Message) else None
+        game.task = asyncio.create_task(self._roulette_loop(game))
 
-            bet_label = {
-                "red": "Red",
-                "black": "Black",
-                "odd": "Odd",
-                "even": "Even",
-                "low": "Low (1-18)",
-                "high": "High (19-36)",
-            }.get(bet_type, f"Number {number}")
+    # -------------------------------------------------------------- roulette
 
-            # Create result embed
-            embed = discord.Embed(title="Roulette", color=COLOR_INFO)
-
-            # Determine color display
-            if result_number == 0:
-                color_str = "Green"
-            elif is_red:
-                color_str = "Red"
-            else:
-                color_str = "Black"
-
-            embed.add_field(name="Result", value=f"**{result_number}** {color_str}", inline=False)
-
-            embed.add_field(name="Your Bet", value=bet_label, inline=True)
-            embed.add_field(name="Bet Amount", value=f"{amount:,} 💎️", inline=True)
-
-            # Handle payout
-            if won:
-                payout = amount * multiplier
-                profit = payout - amount
-                wallet.balance += payout
-
-                await EconomyUtils.add_money(
-                    session, ctx.author.id, payout, "casino", f"Roulette win: {payout} 💎️"
+    def _roulette_bet_embed(self, game: RouletteGame) -> discord.Embed:
+        """Betting-phase embed: table of placed bets + closing note."""
+        embed = discord.Embed(color=ROULETTE_GREEN)
+        EmbedBuilder.set_author_from_user(embed, game.starter)
+        lines = ["**New roulette game started!**", ""]
+        for user_bets in game.bets.values():
+            for bet in user_bets:
+                who = "You" if bet.user.id == game.starter.id else bet.user.mention
+                lines.append(
+                    f"-> {who} placed **{format_coins(bet.amount)}** on "
+                    f"**{roulette_bet_label(bet.bet_type, bet.number)}**."
                 )
+        lines.append("")
+        lines.append("*The wheel spins 15 seconds after the last bet (maximum 1 minute).*")
+        embed.description = "\n".join(lines)
+        return embed
 
-                embed.add_field(
-                    name="You Won", value=f"Payout: {payout:,} 💎️ (+{profit:,})", inline=False
-                )
-                embed.color = COLOR_SUCCESS
-            else:
-                embed.add_field(name="You Lost", value=f"Lost: {amount:,} 💎️", inline=False)
-                embed.color = COLOR_ERROR
+    def _roulette_result_embed(
+        self,
+        game: RouletteGame,
+        result_number: int,
+        color_str: str,
+        summary: List[Tuple[Any, int, int, int]],
+        starter_balance: int,
+    ) -> discord.Embed:
+        """Result embed: winning number, the starter's outcome + balance, and
+        a winners/losers summary for the whole table."""
+        starter = next((s for s in summary if s[0].id == game.starter.id), None)
+        if starter is None:
+            starter = (game.starter, 0, 0, 0)
+        _, total_bet, total_payout, net = starter
+        won = net > 0
 
+        embed = discord.Embed(color=COLOR_SUCCESS if won else COLOR_ERROR)
+        EmbedBuilder.set_author_from_user(embed, game.starter)
+        embed.description = (
+            "**Roulette Result**\n\n"
+            f"**Winning Number:** `{result_number}`\n"
+            f"**Winning Color:** {color_str}"
+        )
+
+        choices = [
+            roulette_bet_label(b.bet_type, b.number) for b in game.bets.get(game.starter.id, [])
+        ]
+        embed.add_field(
+            name="Bet Information",
+            value=f"Choice: **{', '.join(choices)}**\nAmount: {format_coins(total_bet)}",
+            inline=False,
+        )
+
+        outcome_block = "```diff\n+ WIN\n```" if won else "```diff\n- LOSS\n```"
+        if won:
+            result_lines = f"Payout: {format_coins(total_payout)}\nProfit: +{format_coins(net)}"
+        else:
+            result_lines = f"Payout: {format_coins(0)}\nLoss: -{format_coins(total_bet)}"
+        embed.add_field(name="Outcome", value=f"{outcome_block}\n{result_lines}", inline=False)
+
+        embed.add_field(name="Balance", value=f"```\n{starter_balance:,} 💎️\n```", inline=False)
+
+        # Multiplayer summary: winners and losers, first few + overflow note.
+        if len(summary) > 1:
+            max_shown = 5
+            winners = sorted((s for s in summary if s[3] > 0), key=lambda s: s[3], reverse=True)
+            losers = sorted((s for s in summary if s[3] < 0), key=lambda s: s[3])
+            if winners:
+                lines = [f"{s[0].mention} **+{s[3]:,} 💎️**" for s in winners[:max_shown]]
+                if len(winners) > max_shown:
+                    lines.append(f"+ {len(winners) - max_shown} more player(s)")
+                embed.add_field(name="Winners", value="\n".join(lines), inline=False)
+            if losers:
+                lines = [f"{s[0].mention} **{s[3]:,} 💎️**" for s in losers[:max_shown]]
+                if len(losers) > max_shown:
+                    lines.append(f"+ {len(losers) - max_shown} more player(s)")
+                embed.add_field(name="Losers", value="\n".join(lines), inline=False)
+        return embed
+
+    async def _roulette_loop(self, game: RouletteGame) -> None:
+        """Wait out the betting window, then spin the wheel."""
+        try:
+            while True:
+                await asyncio.sleep(1)
+                now = time.monotonic()
+                if now - game.last_bet_at >= RouletteGame.IDLE_SECONDS or (
+                    now - game.started_at >= RouletteGame.MAX_SECONDS
+                ):
+                    break
+        except asyncio.CancelledError:
+            return
+        await self._spin_roulette(game)
+
+    async def _spin_roulette(self, game: RouletteGame) -> None:
+        """Resolve every bet against the winning number and post the result."""
+        async with game.lock:
+            if game.closed:
+                return
+            game.closed = True
+            bets = {uid: list(bs) for uid, bs in game.bets.items()}
+        if self.roulette_games.get(game.channel_id) is game:
+            del self.roulette_games[game.channel_id]
+
+        result_number = random.randint(0, 36)
+        color_str = roulette_color_of(result_number)
+
+        # Resolve every player's bets into (user, total_bet, total_payout, net).
+        summary: List[Tuple[Any, int, int, int]] = []
+        for uid, user_bets in bets.items():
+            total_bet = sum(b.amount for b in user_bets)
+            total_payout = 0
+            for b in user_bets:
+                won, mult = roulette_outcome(result_number, b.bet_type, b.number)
+                if won:
+                    total_payout += b.amount * mult
+            summary.append((user_bets[0].user, total_bet, total_payout, total_payout - total_bet))
+
+        # Credit winners (bets were already deducted when placed).
+        async with self.bot.get_session() as session:
+            for user, _tb, total_payout, net in summary:
+                if net <= 0:
+                    continue
+                async with lock_manager.for_user(user.id):
+                    await EconomyUtils.add_money(
+                        session, user.id, total_payout, "casino", f"Roulette win: {total_payout} 💎️"
+                    )
+            await session.commit()
+            wallet = await EconomyUtils.get_or_create_wallet(session, game.starter.id)
+            starter_balance = wallet.balance or 0
             await session.commit()
 
-            embed.add_field(name="New Balance", value=f"{wallet.balance:,} 💎️", inline=False)
-
-            await ctx.send(embed=embed)
+        channel = self.bot.get_channel(game.channel_id)
+        if isinstance(channel, (discord.TextChannel, discord.Thread)):
+            embed = self._roulette_result_embed(
+                game, result_number, color_str, summary, starter_balance
+            )
+            try:
+                await channel.send(embed=embed)
+            except discord.HTTPException:
+                pass
 
     @commands.hybrid_command(
         name="slots",
@@ -1576,7 +1774,7 @@ class Casino(commands.Cog):
                     super().__init__(timeout=60)
                     self.action = None
 
-                @discord.ui.button(label="Call", style=discord.ButtonStyle.green)
+                @discord.ui.button(label="Call", style=discord.ButtonStyle.secondary)
                 async def call_button(
                     self, interaction: discord.Interaction, button: discord.ui.Button
                 ):
@@ -1588,7 +1786,7 @@ class Casino(commands.Cog):
                     self.stop()
                     await interaction.response.defer()
 
-                @discord.ui.button(label="Fold", style=discord.ButtonStyle.red)
+                @discord.ui.button(label="Fold", style=discord.ButtonStyle.secondary)
                 async def fold_button(
                     self, interaction: discord.Interaction, button: discord.ui.Button
                 ):
