@@ -101,9 +101,7 @@ class Economy(commands.Cog):
         """1-based leaderboard rank: wallets strictly richer than ``total`` + 1."""
         ahead = (
             await session.execute(
-                select(func.count(Wallet.user_id)).where(
-                    (Wallet.balance + Wallet.bank) > total
-                )
+                select(func.count(Wallet.user_id)).where((Wallet.balance + Wallet.bank) > total)
             )
         ).scalar() or 0
         return int(ahead) + 1
@@ -432,7 +430,7 @@ class Economy(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="withdraw", aliases=["wd"])
+    @commands.command(name="withdraw", aliases=["wd", "with"])
     async def withdraw(self, ctx: commands.Context, amount: str):
         """Withdraw coins from bank to wallet. Get cash for gambling and transactions!"""
         try:
@@ -471,9 +469,11 @@ class Economy(commands.Cog):
             session.add(tx)
             await session.commit()
 
-        embed = EmbedBuilder.success_embed(
-            "Withdrawal Successful", f"You withdrew {format_coins(amount_int)} from your bank."
+        embed = discord.Embed(
+            description=f"You withdrew {format_coins(amount_int)} from your bank.",
+            color=COLOR_SUCCESS,
         )
+        EmbedBuilder.set_author_from_user(embed, ctx.author)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="withdraw", description="Withdraw coins from bank to wallet")
@@ -666,9 +666,7 @@ class Economy(commands.Cog):
 
         # Success rate + reward range from config.json
         if random.random() < float(cfg.get("success_rate", 0.7)):
-            reward = random.randint(
-                int(cfg.get("min_reward", 10)), int(cfg.get("max_reward", 100))
-            )
+            reward = random.randint(int(cfg.get("min_reward", 10)), int(cfg.get("max_reward", 100)))
 
             async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
@@ -786,7 +784,7 @@ class Economy(commands.Cog):
             robber_wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             victim_wallet = await EconomyUtils.get_or_create_wallet(session, user.id)
 
-            min_attempt = int(cfg.get("min_wallet_to_attempt", 200))
+            min_attempt = int(cfg.get("min_wallet_to_attempt", 0))
             min_victim = int(cfg.get("min_victim_balance", 100))
 
             # Need coins to attempt robbery
@@ -914,9 +912,7 @@ class Economy(commands.Cog):
             # Gambling result card: author line, OUTCOME + BALANCE sections.
             outcome_block = "```diff\n+ WIN\n```" if won else "```diff\n- LOSS\n```"
             if won:
-                result_lines = (
-                    f"Payout: {format_coins(payout)}\nProfit: +{format_coins(amount)}"
-                )
+                result_lines = f"Payout: {format_coins(payout)}\nProfit: +{format_coins(amount)}"
             else:
                 result_lines = f"Payout: {format_coins(0)}\nLoss: -{format_coins(amount)}"
 
@@ -1167,8 +1163,7 @@ class Economy(commands.Cog):
                 for tx in txs:
                     sign = "+" if tx.amount >= 0 else ""
                     lines.append(
-                        f"**{tx.type}** {sign}{tx.amount:,} • "
-                        f"*<t:{unix_ts(tx.timestamp)}:R>*"
+                        f"**{tx.type}** {sign}{tx.amount:,} • *<t:{unix_ts(tx.timestamp)}:R>*"
                     )
                 embed.description = "\n".join(lines)
             embed.set_footer(text=f"{tx_count} total transactions")
@@ -1208,9 +1203,7 @@ class Economy(commands.Cog):
         )
         account_lines = []
         if target.created_at:
-            account_lines.append(
-                f"**Account Created:** <t:{int(target.created_at.timestamp())}:D>"
-            )
+            account_lines.append(f"**Account Created:** <t:{int(target.created_at.timestamp())}:D>")
         joined_at = getattr(target, "joined_at", None)
         if joined_at:
             account_lines.append(f"**Joined Server:** <t:{int(joined_at.timestamp())}:D>")
@@ -1352,15 +1345,11 @@ class Economy(commands.Cog):
                 continue
             role = guild.get_role(income.role_id)
             source = role.name if role is not None else f"Role {income.role_id}"
-            payouts.append(
-                (income.amount, source, income.role_id, income.claim_interval or 3600)
-            )
+            payouts.append((income.amount, source, income.role_id, income.claim_interval or 3600))
         return payouts
 
     @staticmethod
-    def _collect_embed(
-        breakdown: List[Tuple[str, int, int]], user
-    ) -> discord.Embed:
+    def _collect_embed(breakdown: List[Tuple[str, int, int]], user) -> discord.Embed:
         """UnbelievaBoat-style role-income embed: success line + numbered roles."""
         lines = "\n".join(
             f"{i} - <@&{role_id}> {earned:,} (coins)"
@@ -1368,8 +1357,7 @@ class Economy(commands.Cog):
         )
         embed = discord.Embed(
             description=(
-                f"<:greentick:1529045309081256026> Role income successfully collected!\n"
-                f"{lines}"
+                f"<:greentick:1529045309081256026> Role income successfully collected!\n{lines}"
             ),
             color=COLOR_SUCCESS,
         )

@@ -215,10 +215,8 @@ class Activities(commands.Cog):
             inv_value = await ItemService.inventory_value(session, target.id)
             total = EconomyService.networth(wallet, inv_value)
             await session.commit()
-        embed = discord.Embed(
-            title=f"{target.display_name}'s Net Worth",
-            color=COLOR_INFO,
-        )
+        embed = discord.Embed(color=COLOR_INFO)
+        EmbedBuilder.set_author_from_user(embed, target)
         embed.add_field(name="Wallet", value=format_coins(wallet.balance), inline=True)
         embed.add_field(name="Bank", value=format_coins(wallet.bank), inline=True)
         embed.add_field(name="Inventory", value=format_coins(inv_value), inline=True)
