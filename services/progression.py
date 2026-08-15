@@ -45,7 +45,7 @@ ACHIEVEMENTS: Dict[str, dict] = {
     },
     "high_roller": {
         "name": "High Roller",
-        "desc": "Gamble 10,000 coins in one bet",
+        "desc": "Gamble 10,000 💎️ in one bet",
     },
     "shopaholic": {
         "name": "Shopaholic",
@@ -262,7 +262,7 @@ class ProgressionService:
             wallet.last_weekly_at = now
             await EconomyUtils.add_money(session, user_id, reward, "weekly", "Weekly reward")
             await session.commit()
-            return True, f"You claimed your weekly reward of **{reward:,} coins**!"
+            return True, f"You claimed your weekly reward of **{reward:,} 💎️**!"
 
     @staticmethod
     async def apply_monthly(
@@ -280,7 +280,7 @@ class ProgressionService:
             wallet.last_monthly_at = now
             await EconomyUtils.add_money(session, user_id, reward, "monthly", "Monthly reward")
             await session.commit()
-            return True, f"You claimed your monthly reward of **{reward:,} coins**!"
+            return True, f"You claimed your monthly reward of **{reward:,} 💎️**!"
 
     @staticmethod
     def _prestige_multiplier(wallet: Wallet) -> float:

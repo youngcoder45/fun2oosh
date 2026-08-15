@@ -112,7 +112,7 @@ class EconomyService:
             sender.balance -= amount
             receiver.balance += received
 
-            tax_note = f"(incl. {int(tax_rate * 100)}% tax: {tax} coins)" if tax else ""
+            tax_note = f"(incl. {int(tax_rate * 100)}% tax: {tax} 💎️)" if tax else ""
             session.add(
                 Transaction(
                     user_id=sender_id,

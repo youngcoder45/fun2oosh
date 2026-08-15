@@ -155,9 +155,9 @@ class EconomyUtils:
     ) -> tuple[bool, str]:
         """Validate a bet amount against limits."""
         if amount < config.min_bet:
-            return False, f"Minimum bet is {config.min_bet} coins."
+            return False, f"Minimum bet is {config.min_bet} 💎️."
         if amount > config.max_bet:
-            return False, f"Maximum bet is {config.max_bet} coins."
+            return False, f"Maximum bet is {config.max_bet} 💎️."
         if user_daily_wagered + amount > config.daily_wager_limit:
             return (
                 False,

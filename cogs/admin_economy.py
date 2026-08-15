@@ -91,12 +91,12 @@ class Admin(commands.Cog):
         """Add money to a user (admin only)."""
         async with self.bot.get_session() as session:
             success = await EconomyUtils.add_money(
-                session, user.id, amount, "admin", f"Admin added {amount} coins"
+                session, user.id, amount, "admin", f"Admin added {amount} 💎️"
             )
 
             if success:
                 await session.commit()
-                await ctx.send(f"Added {amount} coins to {user.mention}.")
+                await ctx.send(f"Added {amount} 💎️ to {user.mention}.")
             else:
                 await ctx.send("Failed to add money.")
 
@@ -120,12 +120,12 @@ class Admin(commands.Cog):
 
         async with self.bot.get_session() as session:
             success = await EconomyUtils.add_money(
-                session, user.id, amount, "admin", f"Admin added {amount} coins"
+                session, user.id, amount, "admin", f"Admin added {amount} 💎️"
             )
 
             if success:
                 await session.commit()
-                await interaction.response.send_message(f"Added {amount} coins to {user.mention}.")
+                await interaction.response.send_message(f"Added {amount} 💎️ to {user.mention}.")
             else:
                 await interaction.response.send_message("Failed to add money.")
 
@@ -466,9 +466,9 @@ class Admin(commands.Cog):
         if ctx.guild is None:
             return await ctx.send("This command only works in servers.")
         if amount <= 0:
-            return await ctx.send("Income must be a positive number of coins.")
+            return await ctx.send("Income must be a positive number of 💎️.")
         if amount > 1_000_000:
-            return await ctx.send("Income cannot exceed 1,000,000 coins.")
+            return await ctx.send("Income cannot exceed 1,000,000 💎️.")
         seconds = parse_duration(interval)
         if seconds is None or seconds < 60:
             return await ctx.send(
@@ -586,7 +586,7 @@ class Admin(commands.Cog):
             )
         if amount > 1_000_000:
             return await interaction.response.send_message(
-                "Income cannot exceed 1,000,000 coins.", ephemeral=True
+                "Income cannot exceed 1,000,000 💎️.", ephemeral=True
             )
         seconds = parse_duration(interval)
         if seconds is None or seconds < 60:

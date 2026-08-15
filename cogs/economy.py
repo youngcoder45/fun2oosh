@@ -151,7 +151,7 @@ class Economy(commands.Cog):
                 f"Try again <t:{next_ts}:R>\n"
                 f"Available at <t:{next_ts}:F>"
             )
-        embed = self._collect_embed(breakdown, earned, next_ts, ctx.author)
+        embed = self._collect_embed(breakdown, ctx.author)
         await ctx.send(embed=embed)
 
     @app_commands.command(name="collect", description="Claim your role income")
@@ -184,7 +184,7 @@ class Economy(commands.Cog):
                 f"Available at <t:{next_ts}:F>",
                 ephemeral=True,
             )
-        embed = self._collect_embed(breakdown, earned, next_ts, interaction.user)
+        embed = self._collect_embed(breakdown, interaction.user)
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="daily", aliases=["d"])
@@ -860,7 +860,7 @@ class Economy(commands.Cog):
             embed = discord.Embed(title="Richest Players", color=COLOR_INFO)
             for idx, user_data in enumerate(users[start : start + per_page], start=start + 1):
                 user = self.bot.get_user(user_data.user_id)
-                name = user.display_name if user is not None else f"User {user_data.user_id}"
+                name = user.display_name if user is not None else f"<@{user_data.user_id}>"
                 embed.add_field(
                     name=f"#{idx} {name}",
                     value=(
@@ -1169,22 +1169,18 @@ class Economy(commands.Cog):
 
     @staticmethod
     def _collect_embed(
-        breakdown: List[Tuple[str, int]], amount: int, next_ts: int, user
+        breakdown: List[Tuple[str, int]], user
     ) -> discord.Embed:
-        """Role-income embed: author = actor, per-role breakdown, next claim."""
-        embed = discord.Embed(color=COLOR_SUCCESS)
+        """UnbelievaBoat-style role-income embed: success line + numbered roles."""
+        lines = "\n".join(
+            f"{i} - @{source} {earned:,} (coins)"
+            for i, (source, earned) in enumerate(breakdown, start=1)
+        )
+        embed = discord.Embed(
+            description=f"Role income successfully collected!\n{lines}",
+            color=COLOR_SUCCESS,
+        )
         EmbedBuilder.set_author_from_user(embed, user)
-        if len(breakdown) == 1:
-            source, earned = breakdown[0]
-            embed.add_field(name="Income Source", value=source, inline=True)
-            embed.add_field(name="Amount Earned", value=f"**{earned:,}** coins", inline=True)
-        else:
-            lines = "\n".join(
-                f"**{source}** — +{earned:,} coins" for source, earned in breakdown
-            )
-            embed.add_field(name="Income Sources", value=lines, inline=False)
-            embed.add_field(name="Total Earned", value=f"**{amount:,}** coins", inline=False)
-        embed.add_field(name="Next Claim", value=f"<t:{next_ts}:R>", inline=False)
         return embed
 
     async def _guard_error(self, ctx, session) -> Optional[str]:

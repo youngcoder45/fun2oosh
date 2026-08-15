@@ -326,7 +326,7 @@ class Shop(commands.Cog):
     @commands.hybrid_command(name="sell", description="Sell an item from your inventory")
     @app_commands.describe(item_id="The item ID to sell", qty="Quantity (default 1)")
     async def sell(self, ctx: commands.Context, item_id: str, qty: int = 1):
-        """Sell items back for coins."""
+        """Sell items back for 💎️."""
         if qty <= 0:
             return await ctx.send("Quantity must be positive.")
         async with self.bot.get_session() as session:

@@ -271,7 +271,7 @@ class ItemService:
             if "money_min" in effects:
                 amount = random.randint(effects["money_min"], effects["money_max"])
                 await EconomyUtils.add_money(session, user_id, amount, "item", f"Used {item.name}")
-                msg = f"You used **{item.name}** and got **{amount:,} coins**!"
+                msg = f"You used **{item.name}** and got **{amount:,} 💎️**!"
 
             elif "booster" in effects:
                 booster = effects["booster"]
@@ -309,7 +309,7 @@ class ItemService:
             await EconomyUtils.add_money(
                 session, user_id, money_gained, "crate", f"Opened {item.name}"
             )
-            lines.append(f"**{money_gained:,} coins**")
+            lines.append(f"**{money_gained:,} 💎️**")
 
         for slot in effects.get("items", []):
             if random.random() < slot.get("chance", 0.3):

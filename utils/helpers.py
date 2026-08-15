@@ -36,6 +36,7 @@ def unix_ts(dt) -> int:
         return 0
     if dt.tzinfo is None:
         from datetime import timezone
+
         dt = dt.replace(tzinfo=timezone.utc)
     return int(dt.timestamp())
 
@@ -43,9 +44,9 @@ def unix_ts(dt) -> int:
 def format_coins(amount) -> str:
     """Format an amount of coins with thousands separators."""
     try:
-        return f"{int(amount):,} coins"
+        return f"{int(amount):,} 💎️"
     except (TypeError, ValueError):
-        return f"{amount} coins"
+        return f"{amount} 💎️"
 
 
 def event_names(user, guild) -> Tuple[str, str]:
@@ -92,7 +93,7 @@ def parse_duration(text: str) -> Optional[int]:
     except ValueError:
         pass
 
-    units = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
     total = 0
     i = 0
     while i < len(raw):
@@ -197,9 +198,9 @@ class EmbedBuilder:
         thumbnail = getattr(user, "display_avatar", None)
         if thumbnail is not None:
             embed.set_thumbnail(url=thumbnail.url)
-        embed.add_field(name="Wallet", value=f"**{balance or 0:,}** coins", inline=True)
-        embed.add_field(name="Bank", value=f"**{bank or 0:,}** coins", inline=True)
-        embed.add_field(name="Total", value=f"**{total:,}** coins", inline=True)
+        embed.add_field(name="Wallet", value=f"**{balance or 0:,}** 💎️", inline=True)
+        embed.add_field(name="Bank", value=f"**{bank or 0:,}** 💎️", inline=True)
+        embed.add_field(name="Total", value=f"**{total:,}** 💎️", inline=True)
         return embed
 
     @staticmethod
@@ -234,8 +235,8 @@ class EmbedBuilder:
                 except Exception:
                     name = None
             if name is None:
-                name = f"User {user_id}"
-            lines.append(f"**#{rank}** {name} - {total:,} coins")
+                name = f"<@{user_id}>"
+            lines.append(f"**#{rank}** {name} - {total:,} 💎️")
 
         embed.description = "\n".join(lines)
         return embed

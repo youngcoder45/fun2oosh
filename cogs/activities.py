@@ -72,7 +72,11 @@ class Activities(commands.Cog):
                 )
                 embed = EmbedBuilder.activity_embed(
                     event_message(
-                        key, final, self.config.currency_name, user, guild,
+                        key,
+                        final,
+                        self.config.currency_name,
+                        user,
+                        guild,
                         fallback=SUCCESS_FALLBACKS[key],
                     ),
                     user=ctx.author,
@@ -80,7 +84,11 @@ class Activities(commands.Cog):
             else:
                 embed = EmbedBuilder.activity_embed(
                     event_message(
-                        f"{key}_failure", 0, self.config.currency_name, user, guild,
+                        f"{key}_failure",
+                        0,
+                        self.config.currency_name,
+                        user,
+                        guild,
                         fallback=fail_text,
                     ),
                     color=COLOR_ERROR,
@@ -94,7 +102,7 @@ class Activities(commands.Cog):
     @commands.command(name="hunt")
     @check_cooldown("hunt", 45)
     async def hunt(self, ctx: commands.Context):
-        """Hunt for wild game. 60% success, earn 30-180 coins (more with a rifle)."""
+        """Hunt for wild game. 60% success, earn 30-180 💎️ (more with a rifle)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "hunt")
@@ -102,7 +110,7 @@ class Activities(commands.Cog):
     @commands.command(name="fish", aliases=["fishing"])
     @check_cooldown("fish", 45)
     async def fish(self, ctx: commands.Context):
-        """Go fishing. 55% success, earn 20-150 coins (more with a rod)."""
+        """Go fishing. 55% success, earn 20-150 💎️ (more with a rod)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "fish")
@@ -110,7 +118,7 @@ class Activities(commands.Cog):
     @commands.command(name="mine", aliases=["mining"])
     @check_cooldown("mine", 60)
     async def mine(self, ctx: commands.Context):
-        """Mine for ore. 50% success, earn 40-250 coins (more with a pickaxe)."""
+        """Mine for ore. 50% success, earn 40-250 💎️ (more with a pickaxe)."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "mine")

@@ -110,15 +110,14 @@ configured interval (VIP every 2h, Member every hour — holding both pays both)
 ### Collect embed (minimal — an admin-granted claim, not a job)
 ```
 [pfp] Alice                    [success green]
-  Income Sources:                       Total Earned: 950 coins
-    VIP — +750 coins
-    Member — +200 coins
-  Next Claim: <t:1730000000:R>   → renders "in 1 hour"
+Role income successfully collected!
+1 - @VIP 750 (coins)
+2 - @Member 200 (coins)
 ```
-Single-role claims render as a simple `Income Source` field. Multi-role claims
-show a per-role breakdown and total. Next claim is the soonest role window as
-a Discord relative timestamp. No footer, no decorative emoji — a role perk,
-not another `work`.
+UnbelievaBoat-style: the description opens with the success line, then lists
+each collected role as a numbered `@role amount (coins)` line. Single-role
+claims render the same one-line list. No footer, no decorative emoji — a role
+perk, not another `work`.
 
 ### Database changes
 
@@ -321,6 +320,7 @@ You repaired three motorcycles and earned 142 coins.
   builder behind all activity embeds; it derives the author name and avatar
   from the passed user.
 - `!collect` uses the same actor author header (name + pfp, no title) and
-  shows the breakdown, total earned, and next claim only — no balance field.
+  renders a UnbelievaBoat-style success line + numbered role list — no
+  balance field.
 - Casino result embeds (e.g. coinflip) keep a New Balance field — gambling
   results, not activity commands.
