@@ -40,6 +40,11 @@ jobs:
           DATABASE_URL: sqlite+aiosqlite:///ci_events.db
         run: python tests/test_events.py
 
+      - name: Config system test
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///ci_config.db
+        run: python tests/test_config.py
+
       - name: Boot smoke test
         env:
           DATABASE_URL: sqlite+aiosqlite:///ci_smoke.db
@@ -66,6 +71,7 @@ jobs:
                   "balance", "work", "daily", "shop", "buy", "use", "trade",
                   "hunt", "fish", "mine", "networth", "achievements",
                   "blackjack", "slots", "roulette", "econfig", "audit", "prestige",
+                  "profile", "add-money", "reloadconfig",
               }
               names = {c.name for c in bot.commands}
               missing = required - names

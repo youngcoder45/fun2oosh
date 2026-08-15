@@ -82,11 +82,11 @@ class Fun2OoshBot(commands.Bot):
         await run_migrations(self.engine)
         logger.info("Database ready (%s)", self.config.database_url)
 
-        # Seed the item catalog from data/items.json (no-op if already seeded)
+        # Sync the item catalog from data/config.json (inserts/updates items)
         async with self.session_factory() as session:
-            seeded = await ItemService.seed(session)
-            if seeded:
-                logger.info("Seeded %d items into the catalog", seeded)
+            item_count = await ItemService.seed(session)
+            if item_count:
+                logger.info("Synced %d items into the catalog from config", item_count)
 
         for cog in CORE_COGS:
             await self.load_extension(cog)

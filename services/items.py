@@ -1,5 +1,5 @@
 """
-Item service: catalog seeding, inventory management, item usage effects,
+Item service: catalog sync, inventory management, item usage effects,
 crate/lootbox rolling, and in-memory money boosters.
 
 Inventory mutations always happen under the owning user's lock.
@@ -10,20 +10,19 @@ import logging
 import random
 import time
 from datetime import timedelta
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import discord
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import InventoryItem, Item, utcnow
 from utils.economy_utils import EconomyUtils
+from utils.runtime_config import items as config_items
 
 from .locks import lock_manager
 
 logger = logging.getLogger(__name__)
-
-ITEM_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "items.json"
 
 
 class BoosterManager:
@@ -70,37 +69,51 @@ class ItemService:
 
     @staticmethod
     async def seed(session: AsyncSession) -> int:
-        """Seed the item catalog from ``data/items.json`` if the table is empty."""
-        existing = (await session.execute(select(func.count(Item.id)))).scalar() or 0
-        if existing > 0:
+        """Sync the catalog from ``data/config.json`` (upsert by item id).
+
+        Every item defined in config is inserted or updated, so editing
+        ``data/config.json`` and restarting (or running ``!reloadconfig``)
+        applies the new catalog. Items added at runtime via ``!shopadd`` but
+        not present in config are left untouched.
+        """
+        rows = config_items()
+        if not rows:
+            logger.warning("No shop items in config -> skipping catalog sync.")
             return 0
-        if not ITEM_DATA_PATH.exists():
-            logger.warning("Item catalog %s not found -> skipping seed.", ITEM_DATA_PATH)
-            return 0
-        with ITEM_DATA_PATH.open(encoding="utf-8") as f:
-            data = json.load(f)
-        for row in data:
-            session.add(
-                Item(
-                    id=row["id"],
-                    name=row["name"],
-                    description=row.get("description"),
-                    price=row.get("price", 0),
-                    sell_price=row.get("sell_price", 0),
-                    category=row.get("category", "misc"),
-                    stackable=row.get("stackable", True),
-                    consumable=row.get("consumable", False),
-                    limited=row.get("limited", False),
-                    rarity=row.get("rarity", "common"),
-                    emoji=row.get("emoji", ""),  # ???
-                    max_stack=row.get("max_stack", 99),
-                    expires_in=row.get("expires_in"),
-                    effects=json.dumps(row["effects"]) if row.get("effects") else None,
-                )
+        count = 0
+        for row in rows:
+            item_id = row.get("id")
+            if not item_id:
+                continue
+            fields = dict(
+                name=row.get("name", item_id),
+                description=row.get("description"),
+                price=row.get("price", 0),
+                sell_price=row.get("sell_price", 0),
+                category=row.get("category", "misc"),
+                stackable=row.get("stackable", True),
+                giveable=row.get("giveable", True),
+                consumable=row.get("consumable", False),
+                limited=row.get("limited", False),
+                rarity=row.get("rarity", "common"),
+                emoji=row.get("emoji", ""),
+                max_stack=row.get("max_stack", 99),
+                expires_in=row.get("expires_in"),
+                effects=json.dumps(row["effects"]) if row.get("effects") else None,
+                bought_message=row.get("bought_message"),
+                used_message=row.get("used_message"),
+                gave_message=row.get("gave_message"),
             )
+            existing = await ItemService.get(session, item_id)
+            if existing is not None:
+                for key, value in fields.items():
+                    setattr(existing, key, value)
+            else:
+                session.add(Item(id=item_id, **fields))
+            count += 1
         await session.commit()
-        logger.info("Seeded %d items from %s", len(data), ITEM_DATA_PATH.name)
-        return len(data)
+        logger.info("Synced %d items from config.", count)
+        return count
 
     @staticmethod
     async def get(session: AsyncSession, item_id: str) -> Optional[Item]:
@@ -247,10 +260,17 @@ class ItemService:
             return True
 
     @staticmethod
-    async def use_item(session: AsyncSession, user_id: int, item: Item) -> Tuple[bool, str]:
+    async def use_item(
+        session: AsyncSession,
+        user_id: int,
+        item: Item,
+        ctx=None,
+    ) -> Tuple[bool, str]:
         """Consume one unit of a consumable item and apply its effects.
 
-        Returns ``(success, message)``. Runs entirely under the user lock.
+        ``ctx`` is required for effects that need a guild (e.g. adding a
+        role). Returns ``(success, message)``. Runs entirely under the user
+        lock; the item is only consumed after every effect succeeded.
         """
         if not item.consumable:
             return False, "That item can't be used."
@@ -273,6 +293,13 @@ class ItemService:
                 await EconomyUtils.add_money(session, user_id, amount, "item", f"Used {item.name}")
                 msg = f"You used **{item.name}** and got **{amount:,} 💎️**!"
 
+            elif "role" in effects:
+                role_ok, msg = await ItemService._apply_role_effect(
+                    session, user_id, item, effects, ctx
+                )
+                if not role_ok:
+                    return False, msg
+
             elif "booster" in effects:
                 booster = effects["booster"]
                 mult = booster.get("multiplier", 2.0)
@@ -294,6 +321,43 @@ class ItemService:
                 await session.delete(inv)
             await session.commit()
             return True, msg
+
+    @staticmethod
+    async def _apply_role_effect(
+        session: AsyncSession,
+        user_id: int,
+        item: Item,
+        effects: dict,
+        ctx,
+    ) -> Tuple[bool, str]:
+        """Grant the configured role from ``effects["role"]``.
+
+        The role can be configured by name (applied per-guild) or by numeric
+        role id. Returns ``(success, message)``; on failure the item is not
+        consumed.
+        """
+        if ctx is None or getattr(ctx, "guild", None) is None:
+            return False, "This item must be used in a server to assign its role."
+        guild = ctx.guild
+        member = guild.get_member(user_id)
+        if member is None:
+            return False, "You must be in this server to receive the role."
+
+        role_spec = effects["role"]
+        role = None
+        if isinstance(role_spec, int):
+            role = guild.get_role(role_spec)
+        else:
+            role = discord.utils.get(guild.roles, name=str(role_spec))
+            if role is None and str(role_spec).isdigit():
+                role = guild.get_role(int(role_spec))
+        if role is None:
+            return False, "The role configured for this item no longer exists in this server."
+        try:
+            await member.add_roles(role, reason=f"Used {item.name}")
+        except discord.Forbidden:
+            return False, "I don't have permission to assign that role."
+        return True, f"You used **{item.name}** and received the **{role.name}** role!"
 
     @staticmethod
     async def _open_crate_raw(

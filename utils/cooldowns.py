@@ -71,8 +71,12 @@ def cooldown_notice(key: str, remaining_seconds: float) -> str:
     )
 
 
-def check_cooldown(key: str, seconds: int):
+def check_cooldown(key: str, seconds):
     """Decorator that enforces a per-user cooldown on a prefix command.
+
+    ``seconds`` may be an int or a zero-argument callable that returns the
+    duration (e.g. reading from ``data/config.json``), so cooldowns can be
+    tuned at runtime.
 
     Usage::
 
@@ -86,8 +90,9 @@ def check_cooldown(key: str, seconds: int):
         @functools.wraps(func)
         async def wrapper(self, ctx, *args, **kwargs):
             user_id = ctx.author.id
-            if cooldown_manager.is_on_cooldown(key, user_id, seconds):
-                remaining = cooldown_manager.get_remaining_time(key, user_id, seconds)
+            duration = seconds() if callable(seconds) else seconds
+            if cooldown_manager.is_on_cooldown(key, user_id, duration):
+                remaining = cooldown_manager.get_remaining_time(key, user_id, duration)
                 await ctx.send(cooldown_notice(key, remaining))
                 return
             cooldown_manager.set_cooldown(key, user_id)

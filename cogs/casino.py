@@ -395,29 +395,31 @@ class BlackjackGame:
                 await self.message.edit(embed=embed, view=self.view)  # type: ignore
 
 
-class RouletteView(discord.ui.View):
-    """Interactive view for roulette betting."""
+def parse_roulette_bet(bet: str) -> Tuple[Optional[str], Optional[int]]:
+    """Parse a roulette bet string into ``(bet_type, number)``.
 
-    def __init__(self, game, player_id: int):
-        super().__init__(timeout=60)
-        self.game = game
-        self.player_id = player_id
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.player_id:
-            await interaction.response.send_message("This is not your game!", ephemeral=True)
-            return False
-        return True
-
-    @discord.ui.button(label="Spin!", style=discord.ButtonStyle.danger)
-    async def spin_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Spin the roulette wheel."""
-        await interaction.response.defer()
-        await self.game.spin(interaction)
-
-        # Disable button after spin
-        button.disabled = True
-        await interaction.edit_original_response(view=self)
+    ``bet_type`` is one of ``red/black/odd/even/low/high/number``, or ``None``
+    when the bet is invalid. ``number`` is only set for straight number bets
+    (``!roulette 100 17`` / ``!roulette 100 0``).
+    """
+    bet_key = bet.strip().lower().replace(" ", "")
+    if bet_key in ("red", "r"):
+        return "red", None
+    if bet_key in ("black", "b", "blk"):
+        return "black", None
+    if bet_key in ("odd", "o"):
+        return "odd", None
+    if bet_key in ("even", "e"):
+        return "even", None
+    if bet_key in ("low", "l", "1-18", "1to18"):
+        return "low", None
+    if bet_key in ("high", "h", "19-36", "19to36"):
+        return "high", None
+    if bet_key.isdigit():
+        number = int(bet_key)
+        if 0 <= number <= 36:
+            return "number", number
+    return None, None
 
 
 class SlotMachine:
@@ -543,46 +545,32 @@ class Casino(commands.Cog):
     @commands.hybrid_command(
         name="roulette",
         aliases=["rl"],
-        description="Play roulette! Bet on numbers, colors, or ranges.",
+        description="Play roulette! e.g. !roulette 100 red, !roulette 100 17",
     )
     @app_commands.describe(
-        bet_type="Type of bet: number (0-36), red, black, odd, even, low (1-18), high (19-36)",
-        value="The value to bet on (for number bets)",
         amount="Amount to bet",
+        bet="red, black, odd, even, low (1-18), high (19-36), or a number 0-36",
     )
-    async def roulette(
-        self, ctx: commands.Context, bet_type: str, value: Optional[str], amount: int
-    ):
-        """European roulette - Bet on numbers (36x), colors (2x), odd/even (2x), or ranges (2x)."""
+    async def roulette(self, ctx: commands.Context, amount: int, bet: str):
+        """European roulette — `!roulette <amount> <bet>`.
+
+        Bets: red, black, odd, even, low (1-18), high (19-36), or a number
+        0-36. Numbers pay 36x, everything else 2x.
+        """
+        bet_type, number = parse_roulette_bet(bet)
+        if bet_type is None:
+            return await ctx.send(
+                "Invalid bet! Use a number (0-36), red, black, odd, even, "
+                "low (1-18), or high (19-36). Example: `!roulette 100 red`",
+                ephemeral=True,
+            )
+
         async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             # Check bet limits
             valid, error = await self.check_bet_limits(ctx.author.id, amount, session)
             if not valid:
                 await ctx.send(error, ephemeral=True)
                 return
-
-            # Validate bet type
-            bet_type = bet_type.lower()
-            valid_bets = ["number", "red", "black", "odd", "even", "low", "high"]
-
-            if bet_type not in valid_bets:
-                await ctx.send(
-                    f"Invalid bet type! Choose from: {', '.join(valid_bets)}", ephemeral=True
-                )
-                return
-
-            # Validate number bet
-            if bet_type == "number":
-                if value is None:
-                    await ctx.send("You must specify a number (0-36)!", ephemeral=True)
-                    return
-                try:
-                    number = int(value)
-                    if number < 0 or number > 36:
-                        raise ValueError
-                except ValueError:
-                    await ctx.send("Invalid number! Must be 0-36.", ephemeral=True)
-                    return
 
             # Deduct bet
             wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
@@ -604,28 +592,29 @@ class Casino(commands.Cog):
             # Determine win
             won = False
             multiplier = 0
-
-            if bet_type == "number" and value and result_number == int(value):
-                won = True
-                multiplier = 36  # 35:1 payout + original bet
+            if bet_type == "number" and number is not None and result_number == number:
+                won, multiplier = True, 36  # 35:1 payout + original bet
             elif bet_type == "red" and is_red:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
             elif bet_type == "black" and is_black:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
             elif bet_type == "odd" and is_odd:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
             elif bet_type == "even" and is_even:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
             elif bet_type == "low" and is_low:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
             elif bet_type == "high" and is_high:
-                won = True
-                multiplier = 2
+                won, multiplier = True, 2
+
+            bet_label = {
+                "red": "Red",
+                "black": "Black",
+                "odd": "Odd",
+                "even": "Even",
+                "low": "Low (1-18)",
+                "high": "High (19-36)",
+            }.get(bet_type, f"Number {number}")
 
             # Create result embed
             embed = discord.Embed(title="Roulette", color=COLOR_INFO)
@@ -640,12 +629,7 @@ class Casino(commands.Cog):
 
             embed.add_field(name="Result", value=f"**{result_number}** {color_str}", inline=False)
 
-            embed.add_field(
-                name="Your Bet",
-                value=f"{bet_type.title()}" + (f"{value}" if value else ""),
-                inline=True,
-            )
-
+            embed.add_field(name="Your Bet", value=bet_label, inline=True)
             embed.add_field(name="Bet Amount", value=f"{amount:,} 💎️", inline=True)
 
             # Handle payout

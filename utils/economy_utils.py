@@ -108,13 +108,18 @@ class EconomyUtils:
         type_: str,
         description: str = "",
         game: Optional[str] = None,
+        *,
+        to_bank: bool = False,
     ) -> bool:
-        """Add money to a user's wallet."""
+        """Add money to a user's wallet (or bank when ``to_bank`` is set)."""
         if amount < 0:
             return False
 
         wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
-        wallet.balance += amount
+        if to_bank:
+            wallet.bank += amount
+        else:
+            wallet.balance += amount
 
         tx = Transaction(
             user_id=user_id, type=type_, amount=amount, description=description, game=game

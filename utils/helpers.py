@@ -12,6 +12,7 @@ footers are only used when they carry information (pagination state,
 cooldown hints, contextual tips, audit references).
 """
 
+import string
 from typing import Any, List, Optional, Tuple
 
 import discord
@@ -108,6 +109,30 @@ def parse_duration(text: str) -> Optional[int]:
         total += number * units[raw[i]]
         i += 1
     return total
+
+
+class _TolerantTemplateFormatter(string.Formatter):
+    """Formatter that leaves unknown ``{placeholders}`` untouched."""
+
+    def get_field(self, field_name: str, args, kwargs) -> tuple:
+        try:
+            return super().get_field(field_name, args, kwargs)
+        except (KeyError, IndexError):
+            return "{" + field_name + "}", field_name
+
+
+_template_formatter = _TolerantTemplateFormatter()
+
+
+def format_template(template: Optional[str], **values: Any) -> Optional[str]:
+    """Fill ``{placeholders}`` in a message template from config.json.
+
+    Unknown placeholders are left as-is so templates degrade gracefully.
+    Returns ``None`` when the template is empty/None.
+    """
+    if not template:
+        return template
+    return _template_formatter.vformat(template, (), values)
 
 
 class EmbedBuilder:

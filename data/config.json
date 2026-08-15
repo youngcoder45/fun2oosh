@@ -1,0 +1,444 @@
+{
+  "activities": {
+    "hunt": {
+      "success_rate": 0.60,
+      "min_reward": 30,
+      "max_reward": 180,
+      "cooldown_seconds": 45,
+      "insurance_cost": 15
+    },
+    "fish": {
+      "success_rate": 0.55,
+      "min_reward": 20,
+      "max_reward": 150,
+      "cooldown_seconds": 45,
+      "insurance_cost": 10
+    },
+    "mine": {
+      "success_rate": 0.50,
+      "min_reward": 40,
+      "max_reward": 250,
+      "cooldown_seconds": 60,
+      "insurance_cost": 20
+    },
+    "crime": {
+      "success_rate": 0.40,
+      "min_reward": 300,
+      "max_reward": 2000,
+      "cooldown_seconds": 300,
+      "fine_rate": 0.02,
+      "fine_min": 200,
+      "fine_max": 600,
+      "crimes": [
+        { "description": "robbed a bank", "min_reward": 500, "max_reward": 1500 },
+        { "description": "hacked a corporation", "min_reward": 800, "max_reward": 2000 },
+        { "description": "stole a rare painting", "min_reward": 600, "max_reward": 1800 },
+        { "description": "smuggled contraband", "min_reward": 400, "max_reward": 1200 },
+        { "description": "pickpocketed tourists", "min_reward": 300, "max_reward": 800 }
+      ]
+    },
+    "rob": {
+      "success_rate": 0.35,
+      "cooldown_seconds": 600,
+      "min_wallet_to_attempt": 200,
+      "min_victim_balance": 100,
+      "rob_min_percent": 0.10,
+      "rob_max_percent": 0.30,
+      "rob_cap": 5000,
+      "fine_rate": 0.02,
+      "fine_min": 200,
+      "fine_max": 500
+    },
+    "search": {
+      "success_rate": 0.80,
+      "cooldown_seconds": 45,
+      "locations": [
+        { "name": "couch cushions", "min_reward": 20, "max_reward": 80 },
+        { "name": "park bench", "min_reward": 30, "max_reward": 100 },
+        { "name": "parking lot", "min_reward": 15, "max_reward": 60 },
+        { "name": "vending machine", "min_reward": 25, "max_reward": 90 },
+        { "name": "library books", "min_reward": 10, "max_reward": 50 },
+        { "name": "trash bin", "min_reward": 5, "max_reward": 40 },
+        { "name": "car seats", "min_reward": 30, "max_reward": 110 },
+        { "name": "beach sand", "min_reward": 40, "max_reward": 120 }
+      ]
+    },
+    "beg": {
+      "success_rate": 0.70,
+      "min_reward": 10,
+      "max_reward": 100,
+      "cooldown_seconds": 60
+    }
+  },
+  "shop": {
+    "items": [
+      {
+        "id": "fishing_rod",
+        "name": "Fishing Rod",
+        "description": "A trusty rod. 1.5x fish rewards while owned.",
+        "price": 750,
+        "sell_price": 300,
+        "category": "tool",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "tool": "fish",
+          "multiplier": 1.5
+        }
+      },
+      {
+        "id": "pickaxe",
+        "name": "Pickaxe",
+        "description": "Mine harder. 1.5x mine rewards while owned.",
+        "price": 900,
+        "sell_price": 360,
+        "category": "tool",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "tool": "mine",
+          "multiplier": 1.5
+        }
+      },
+      {
+        "id": "hunting_rifle",
+        "name": "Hunting Rifle",
+        "description": "For serious hunters. 1.5x hunt rewards while owned.",
+        "price": 1200,
+        "sell_price": 480,
+        "category": "tool",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "tool": "hunt",
+          "multiplier": 1.5
+        }
+      },
+      {
+        "id": "lollipop",
+        "name": "Lollipop",
+        "description": "Sweet and simple. Grants 10-50 coins.",
+        "price": 50,
+        "sell_price": 15,
+        "category": "consumable",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "used_message": "You unwrapped **{item}** and found **{amount}**!",
+        "effects": {
+          "money_min": 10,
+          "money_max": 50
+        }
+      },
+      {
+        "id": "coffee",
+        "name": "Coffee",
+        "description": "A warm cup of energy. Grants 50-200 coins.",
+        "price": 150,
+        "sell_price": 50,
+        "category": "consumable",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "money_min": 50,
+          "money_max": 200
+        }
+      },
+      {
+        "id": "pizza",
+        "name": "Pizza",
+        "description": "Extra cheese. Grants 150-400 coins.",
+        "price": 200,
+        "sell_price": 70,
+        "category": "consumable",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "money_min": 150,
+          "money_max": 400
+        }
+      },
+      {
+        "id": "energy_drink",
+        "name": "Energy Drink",
+        "description": "Instant boost. Grants 300-700 coins.",
+        "price": 500,
+        "sell_price": 180,
+        "category": "consumable",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "money_min": 300,
+          "money_max": 700
+        }
+      },
+      {
+        "id": "gift_card",
+        "name": "Gift Card",
+        "description": "A mystery gift card. Redeem it for a random amount of coins!",
+        "price": 300,
+        "sell_price": 100,
+        "category": "consumable",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "bought_message": "You bought **{item}** — a perfect gift for someone special.",
+        "used_message": "You scratched off **{item}** and redeemed **{amount}**!",
+        "gave_message": "You handed **{item}** to {user}.",
+        "effects": {
+          "money_min": 100,
+          "money_max": 600
+        }
+      },
+      {
+        "id": "lucky_charm",
+        "name": "Lucky Charm",
+        "description": "1.5x money from all sources for 1 hour.",
+        "price": 2500,
+        "sell_price": 800,
+        "category": "booster",
+        "rarity": "rare",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "booster": {
+            "type": "all",
+            "multiplier": 1.5,
+            "duration": 3600
+          }
+        }
+      },
+      {
+        "id": "booster_2x",
+        "name": "2x Money Booster",
+        "description": "2x money from all sources for 30 minutes.",
+        "price": 5000,
+        "sell_price": 1500,
+        "category": "booster",
+        "rarity": "epic",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "booster": {
+            "type": "all",
+            "multiplier": 2.0,
+            "duration": 1800
+          }
+        }
+      },
+      {
+        "id": "mystery_crate",
+        "name": "Mystery Crate",
+        "description": "Who knows what's inside? Coins, items, or nothing!",
+        "price": 500,
+        "sell_price": 150,
+        "category": "crate",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "crate": true,
+          "money_chance": 0.7,
+          "money_min": 200,
+          "money_max": 800,
+          "items": [
+            { "id": "lollipop", "chance": 0.4, "qty": 2 },
+            { "id": "lucky_charm", "chance": 0.15 },
+            { "id": "gem", "chance": 0.05 }
+          ]
+        }
+      },
+      {
+        "id": "epic_crate",
+        "name": "Epic Crate",
+        "description": "Premium loot. Better odds, better prizes!",
+        "price": 2500,
+        "sell_price": 700,
+        "category": "crate",
+        "rarity": "epic",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "effects": {
+          "crate": true,
+          "money_chance": 0.8,
+          "money_min": 500,
+          "money_max": 2500,
+          "items": [
+            { "id": "energy_drink", "chance": 0.5 },
+            { "id": "trophy", "chance": 0.25 },
+            { "id": "booster_2x", "chance": 0.15 },
+            { "id": "crown", "chance": 0.03 }
+          ]
+        }
+      },
+      {
+        "id": "rose",
+        "name": "Rose",
+        "description": "A flower for someone special.",
+        "price": 150,
+        "sell_price": 60,
+        "category": "collectible",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": true,
+        "max_stack": 99
+      },
+      {
+        "id": "boombox",
+        "name": "Boombox",
+        "description": "Party time!",
+        "price": 1000,
+        "sell_price": 400,
+        "category": "collectible",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "medal",
+        "name": "Medal",
+        "description": "A shiny medal of honor.",
+        "price": 2000,
+        "sell_price": 800,
+        "category": "collectible",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "ring",
+        "name": "Gold Ring",
+        "description": "Shiny and valuable.",
+        "price": 8000,
+        "sell_price": 3500,
+        "category": "collectible",
+        "rarity": "rare",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "gem",
+        "name": "Gem",
+        "description": "A brilliant cut gemstone.",
+        "price": 10000,
+        "sell_price": 4500,
+        "category": "collectible",
+        "rarity": "rare",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "watch",
+        "name": "Luxury Watch",
+        "description": "Keeps perfect time, and style.",
+        "price": 12000,
+        "sell_price": 5000,
+        "category": "collectible",
+        "rarity": "epic",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "trophy",
+        "name": "Golden Trophy",
+        "description": "For winners only.",
+        "price": 15000,
+        "sell_price": 6500,
+        "category": "collectible",
+        "rarity": "epic",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      },
+      {
+        "id": "crown",
+        "name": "Royal Crown",
+        "description": "Only the richest wear this.",
+        "price": 50000,
+        "sell_price": 20000,
+        "category": "collectible",
+        "rarity": "legendary",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": true,
+        "max_stack": 99
+      },
+      {
+        "id": "golden_egg",
+        "name": "Golden Egg",
+        "description": "Legend says it hatches fortune.",
+        "price": 5000,
+        "sell_price": 4000,
+        "category": "collectible",
+        "rarity": "epic",
+        "stackable": true,
+        "giveable": true,
+        "consumable": false,
+        "limited": false,
+        "max_stack": 99
+      }
+    ]
+  }
+}

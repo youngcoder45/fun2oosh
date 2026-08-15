@@ -35,6 +35,12 @@ COLUMN_MIGRATIONS: Dict[str, List[Tuple[str, str]]] = {
     'role_income': [
         ('claim_interval', 'INTEGER DEFAULT 3600'),
     ],
+    'items': [
+        ('giveable', 'BOOLEAN DEFAULT 1'),
+        ('bought_message', 'TEXT'),
+        ('used_message', 'TEXT'),
+        ('gave_message', 'TEXT'),
+    ],
 }
 
 # table -> [(old_column, new_column), ...]

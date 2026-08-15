@@ -10,9 +10,11 @@ from discord.ext import commands
 from sqlalchemy import text
 
 from bot import Fun2OoshBot
+from services import events as events_service
 from services.guild import SETTINGS, AuditService, GuildConfigService
 from services.items import ItemService
 from services.role_income import RoleIncomeService
+from utils import runtime_config
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
 from utils.helpers import (
@@ -86,48 +88,59 @@ class Admin(commands.Cog):
                 return True
         return False
 
-    @commands.command(name="add_money")
-    async def add_money(self, ctx: commands.Context, user: discord.User, amount: int):
-        """Add money to a user (admin only)."""
+    @commands.hybrid_command(
+        name="add-money",
+        aliases=["add_money", "addmoney"],
+        description="Add money to a user (admin only)",
+    )
+    @app_commands.describe(
+        user="User to add money to",
+        amount="Amount to add",
+        destination="Where to add it: cash (wallet) or bank",
+    )
+    async def add_money(
+        self,
+        ctx: commands.Context,
+        user: discord.User,
+        amount: int,
+        destination: str = "cash",
+    ):
+        """Add money to a user (admin only). Destination: cash (default) or bank."""
+        to_bank = destination.strip().lower() in ("bank", "b")
         async with self.bot.get_session() as session:
             success = await EconomyUtils.add_money(
-                session, user.id, amount, "admin", f"Admin added {amount} 💎️"
+                session,
+                user.id,
+                amount,
+                "admin",
+                f"Admin added {amount} 💎️",
+                to_bank=to_bank,
             )
 
             if success:
                 await session.commit()
-                await ctx.send(f"Added {amount} 💎️ to {user.mention}.")
+                place = "bank" if to_bank else "wallet"
+                await ctx.send(f"Added {amount} 💎️ to {user.mention}'s {place}.")
             else:
                 await ctx.send("Failed to add money.")
 
-    @app_commands.command(name="add_money", description="Add money to a user (admin only)")
-    @app_commands.describe(user="User to add money to", amount="Amount to add")
-    async def add_money_slash(
-        self, interaction: discord.Interaction, user: discord.User, amount: int
-    ):
-        """Slash command for adding money."""
-        is_owner = interaction.user.id == self.config.owner_id
-        is_admin = False
-        if interaction.guild:
-            member = interaction.guild.get_member(interaction.user.id)
-            if member and member.guild_permissions.administrator:
-                is_admin = True
-        if not (is_owner or is_admin):
-            await interaction.response.send_message(
-                "You don't have permission to use this command.", ephemeral=True
-            )
-            return
-
+    @commands.hybrid_command(
+        name="reloadconfig",
+        aliases=["reload_config", "reloadcfg"],
+        description="Reload data/config.json and re-sync the shop catalog (admin only)",
+    )
+    async def reloadconfig(self, ctx: commands.Context):
+        """Reload data/config.json and re-sync the shop catalog (admin only)."""
+        runtime_config.reload()
+        events_service.reload()
         async with self.bot.get_session() as session:
-            success = await EconomyUtils.add_money(
-                session, user.id, amount, "admin", f"Admin added {amount} 💎️"
-            )
-
-            if success:
-                await session.commit()
-                await interaction.response.send_message(f"Added {amount} 💎️ to {user.mention}.")
-            else:
-                await interaction.response.send_message("Failed to add money.")
+            count = await ItemService.seed(session)
+        embed = EmbedBuilder.success_embed(
+            "Config Reloaded",
+            f"Reloaded `data/config.json` and synced **{count}** shop items.\n"
+            "New values apply immediately.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(name="reset_economy")
     async def reset_economy(self, ctx: commands.Context, confirmation: str = ""):

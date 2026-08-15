@@ -20,5 +20,5 @@ exclude = ["\\.venv/"]
 # stub noise only: the commands themselves are verified at boot and
 # in the functional tests.
 [[tool.mypy.overrides]]
-module = ["cogs.casino", "cogs.shop", "cogs.admin_economy"]
+module = ["cogs.casino", "cogs.shop", "cogs.admin_economy", "cogs.economy"]
 disable_error_code = ["arg-type"]

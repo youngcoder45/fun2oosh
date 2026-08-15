@@ -1,0 +1,102 @@
+"""Functional tests for the runtime JSON config system.
+
+Covers config loading, percentage-based fines, catalog sync from
+data/config.json, custom item messages, message templates, and roulette bet
+parsing. Run with:
+
+    DATABASE_URL=sqlite+aiosqlite:///test_config.db python tests/test_config.py
+"""
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+_DB = Path("test_config_run.db")
+os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_DB}")
+
+from bot import Fun2OoshBot  # noqa: E402
+from cogs.casino import parse_roulette_bet  # noqa: E402
+from models import Base  # noqa: E402
+from services.items import ItemService  # noqa: E402
+from utils.config import Config  # noqa: E402
+from utils.helpers import format_template  # noqa: E402
+from utils.migrations import run_migrations  # noqa: E402
+from utils.runtime_config import activity, fine_amount, items, reload  # noqa: E402
+
+
+async def main() -> None:
+    reload()
+    bot = Fun2OoshBot(Config())
+    try:
+        async with bot.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await run_migrations(bot.engine)
+
+        # 1. config file loads activities + a populated item catalog
+        assert activity("hunt").get("success_rate") == 0.60, activity("hunt")
+        assert activity("crime").get("fine_rate") == 0.02, activity("crime")
+        assert activity("mine").get("insurance_cost") == 20, activity("mine")
+        assert len(items()) >= 20, len(items())
+        print(f"OK config loads ({len(items())} items)")
+
+        # 2. fine_amount: percentage of wallet, clamped to [fine_min, fine_max]
+        cfg = {"fine_rate": 0.02, "fine_min": 200, "fine_max": 600}
+        assert fine_amount(cfg, 5000, 200, 600) == 200  # 2% of 5000 = 100 -> min
+        assert fine_amount(cfg, 50000, 200, 600) == 600  # 2% of 50000 = 1000 -> max
+        assert fine_amount(cfg, 15000, 200, 600) == 300  # 2% of 15000 = 300
+        assert fine_amount(cfg, 0, 200, 600) == 0  # nothing to fine
+        # no rate -> flat random in range, never more than the balance
+        flat = fine_amount({}, 100, 200, 600)
+        assert 100 <= flat <= 100, flat
+        print("OK fine_amount (% of wallet, clamped)")
+
+        # 3. catalog sync: idempotent upsert, new columns populated
+        async with bot.session_factory() as session:
+            count1 = await ItemService.seed(session)
+            count2 = await ItemService.seed(session)
+            assert count1 == count2 == len(items())
+            item = await ItemService.get(session, "lollipop")
+            assert item is not None and item.giveable is True and item.consumable is True
+            gift = await ItemService.get(session, "gift_card")
+            assert gift is not None
+            assert gift.bought_message and gift.used_message and gift.gave_message
+            print("OK item sync (idempotent, custom messages + giveable)")
+
+        # 4. message templates fill known placeholders, keep unknown ones
+        assert (
+            format_template("You bought {item} x{qty} for {amount}", item="Pizza", qty=2)
+            == "You bought Pizza x2 for {amount}"
+        )
+        assert format_template("Hi {unknown} {user}", user="Bob") == "Hi {unknown} Bob"
+        assert format_template(None, user="Bob") is None
+        print("OK format_template")
+
+        # 5. roulette bet parsing (new !roulette <amount> <bet> signature)
+        assert parse_roulette_bet("red") == ("red", None)
+        assert parse_roulette_bet("R") == ("red", None)
+        assert parse_roulette_bet("black") == ("black", None)
+        assert parse_roulette_bet("odd") == ("odd", None)
+        assert parse_roulette_bet("even") == ("even", None)
+        assert parse_roulette_bet("1-18") == ("low", None)
+        assert parse_roulette_bet("1to18") == ("low", None)
+        assert parse_roulette_bet("19-36") == ("high", None)
+        assert parse_roulette_bet("19to36") == ("high", None)
+        assert parse_roulette_bet("0") == ("number", 0)
+        assert parse_roulette_bet("17") == ("number", 17)
+        assert parse_roulette_bet(" 1 8 ") == ("number", 18)
+        assert parse_roulette_bet("37") == (None, None)
+        assert parse_roulette_bet("banana") == (None, None)
+        print("OK roulette bet parsing")
+
+        print("ALL CONFIG TESTS PASSED")
+    finally:
+        await bot.engine.dispose()
+        if _DB.exists():
+            _DB.unlink()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

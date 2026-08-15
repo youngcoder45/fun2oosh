@@ -13,7 +13,7 @@ Scope: full repository (`cogs/`, `models/`, `services/`, `utils/`, `bot.py`)
 | --- | --- |
 | `cogs/economy.py` | balance, work, collect, daily, weekly, deposit, withdraw, transfer, leaderboard, beg, crime, rob, gamble, richest, give, search, profile |
 | `cogs/casino.py` | blackjack, roulette, slots, coinflip, dice, crash, russianroulette, war, baccarat, hilo, keno, poker |
-| `cogs/admin_economy.py` | add_money, reset_economy |
+| `cogs/admin_economy.py` | add-money (+ add_money alias, cash/bank destination), reloadconfig, reset_economy |
 
 Total: 32 commands (mix of prefix, slash, and hybrid).
 
@@ -84,7 +84,7 @@ Total: 32 commands (mix of prefix, slash, and hybrid).
 ### New tables
 | Table | Purpose |
 | --- | --- |
-| `items` | Shop catalog (seeded from `data/items.json`, admin-manageable) |
+| `items` | Shop catalog (synced from `data/config.json`, admin-manageable) |
 | `inventory` | Per-user item ownership (stackable, durability, expiry) |
 | `guild_config` | Per-server economy overrides |
 | `audit_logs` | Admin action log |

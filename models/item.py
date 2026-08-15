@@ -1,8 +1,9 @@
 """
 Item model: the shop catalog.
 
-Items are seeded from `data/items.json` on startup and can be managed by
-server admins via the `!shopadd` / `!shopremove` commands.
+Items are synced from `data/config.json` on startup (and on
+`!reloadconfig`) and can be managed by server admins via the
+`!shopadd` / `!shopremove` commands.
 """
 
 from typing import Optional
@@ -27,7 +28,15 @@ class Item(Base):
         String(32), default="misc"
     )  # tool|consumable|booster|crate|collectible
     stackable: Mapped[bool] = mapped_column(Boolean, default=True)
+    giveable: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )  # can be gifted / traded to other users
     consumable: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Custom messages (config.json) — None falls back to the built-in text.
+    # Placeholders: {item}, {qty}, {amount}, {user}, {sender}.
+    bought_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    used_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    gave_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     limited: Mapped[bool] = mapped_column(
         Boolean, default=False
     )  # not sold in shop (crate/event only)

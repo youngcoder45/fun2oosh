@@ -18,7 +18,7 @@ from services.locks import lock_manager
 from services.progression import AchievementService
 from utils.config import Config
 from utils.economy_utils import EconomyUtils
-from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins
+from utils.helpers import COLOR_INFO, EmbedBuilder, format_coins, format_template
 from utils.pagination import PaginationView
 
 RARITY_COLORS = {
@@ -215,6 +215,7 @@ class Shop(commands.Cog):
         embed.add_field(name="Price", value=format_coins(item.price), inline=True)
         embed.add_field(name="Sell Price", value=format_coins(item.sell_price), inline=True)
         embed.add_field(name="Stackable", value="Yes" if item.stackable else "No", inline=True)
+        embed.add_field(name="Giveable", value="Yes" if item.giveable else "No", inline=True)
         embed.add_field(name="Usable", value="Yes" if item.consumable else "No", inline=True)
         embed.set_footer(text=f"Item ID: {item.id} • Buy with: !buy {item.id} [qty]")
         return embed
@@ -313,11 +314,22 @@ class Shop(commands.Cog):
                     )
                 )
                 await session.commit()
-                embed = EmbedBuilder.success_embed(
-                    "Purchase Complete!",
+                description = (
                     f"You bought **{item.name}** x{qty} for {format_coins(total)}.\n"
-                    f"New balance: {format_coins(wallet.balance)}",
+                    f"New balance: {format_coins(wallet.balance)}"
                 )
+                if item.bought_message:
+                    description = (
+                        format_template(
+                            item.bought_message,
+                            item=item.name,
+                            qty=qty,
+                            amount=format_coins(total),
+                            user=ctx.author.display_name,
+                        )
+                        or description
+                    )
+                embed = EmbedBuilder.success_embed("Purchase Complete!", description)
                 await ctx.send(embed=embed)
 
             new = await AchievementService.check(session, ctx.author.id, "buy")
@@ -361,14 +373,20 @@ class Shop(commands.Cog):
     @commands.hybrid_command(name="use", description="Use a consumable item")
     @app_commands.describe(item_id="The item ID to use")
     async def use(self, ctx: commands.Context, item_id: str):
-        """Use a consumable item (money items, boosters, crates)."""
+        """Use a consumable item (money items, role items, boosters, crates)."""
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
-            ok, msg = await ItemService.use_item(session, ctx.author.id, item)
+            ok, msg = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
             if not ok:
                 return await ctx.send(msg)
+            if item.used_message:
+                msg = format_template(
+                    item.used_message,
+                    item=item.name,
+                    user=ctx.author.display_name,
+                ) or msg
             embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
@@ -430,15 +448,26 @@ class Shop(commands.Cog):
             item = await ItemService.get(session, item_id.lower())
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
+            if not item.giveable:
+                return await ctx.send(f"**{item.name}** cannot be given away.")
 
             ok = await ItemService.transfer(session, ctx.author.id, user.id, item, qty)
             if not ok:
                 return await ctx.send(f"You don't have {qty}x **{item.name}**.")
 
-            embed = EmbedBuilder.success_embed(
-                "Item Gifted!",
-                f"You gave **{item.name}** x{qty} to {user.mention}.",
-            )
+            description = f"You gave **{item.name}** x{qty} to {user.mention}."
+            if item.gave_message:
+                description = (
+                    format_template(
+                        item.gave_message,
+                        item=item.name,
+                        qty=qty,
+                        user=user.display_name,
+                        sender=ctx.author.display_name,
+                    )
+                    or description
+                )
+            embed = EmbedBuilder.success_embed("Item Gifted!", description)
             await ctx.send(embed=embed)
 
     # ----------------------------------------------------------------- trade
@@ -470,6 +499,8 @@ class Shop(commands.Cog):
             item = await ItemService.get(session, item_id.lower())
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
+            if not item.giveable:
+                return await ctx.send(f"**{item.name}** cannot be traded.")
             have = await ItemService.count(session, ctx.author.id, item.id)
             if have < qty:
                 return await ctx.send(f"You only have {have}x **{item.name}**.")
@@ -481,6 +512,9 @@ class Shop(commands.Cog):
                 if partner_item is None:
                     self.trades.remove(pending)
                     return await ctx.send("The other offer's item no longer exists.")
+                if not partner_item.giveable:
+                    self.trades.remove(pending)
+                    return await ctx.send(f"**{partner_item.name}** cannot be traded.")
                 if pending.item_id == item.id:
                     return await ctx.send("Both offers can't be the same item.")
 

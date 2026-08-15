@@ -2,19 +2,24 @@
 Activities & progression cog.
 
 Commands: hunt, fish, mine, monthly, networth, rep, achievements.
+
+Hunt/fish/mine tuning (success rate, rewards, cooldown, insurance cost on
+failure) comes from ``data/config.json`` -> ``activities``.
 """
 
 import random
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import discord
 from discord.ext import commands
 
 from bot import Fun2OoshBot
+from models import Transaction
 from services.economy import EconomyService, GuardService
 from services.events import event_message
 from services.guild import GuildConfigService
 from services.items import ItemService
+from services.locks import lock_manager
 from services.progression import ACHIEVEMENTS, AchievementService, ProgressionService
 from utils.config import Config
 from utils.cooldowns import check_cooldown
@@ -26,12 +31,37 @@ from utils.helpers import (
     event_names,
     format_coins,
 )
+from utils.runtime_config import activity as activity_config
 
-# activity: (success_rate, min_reward, max_reward, failure_text, tool_key, cooldown)
-ACTIVITIES = {
-    "hunt": (0.60, 30, 180, "The prey got away...", "hunt", 45),
-    "fish": (0.55, 20, 150, "The fish escaped...", "fish", 45),
-    "mine": (0.50, 40, 250, "The tunnel collapsed...", "mine", 60),
+# Built-in fallbacks, used only when data/config.json is missing a key.
+ACTIVITY_DEFAULTS: Dict[str, dict] = {
+    "hunt": {
+        "success_rate": 0.60,
+        "min_reward": 30,
+        "max_reward": 180,
+        "cooldown_seconds": 45,
+        "insurance_cost": 15,
+        "tool": "hunt",
+        "failure_text": "The prey got away...",
+    },
+    "fish": {
+        "success_rate": 0.55,
+        "min_reward": 20,
+        "max_reward": 150,
+        "cooldown_seconds": 45,
+        "insurance_cost": 10,
+        "tool": "fish",
+        "failure_text": "The fish escaped...",
+    },
+    "mine": {
+        "success_rate": 0.50,
+        "min_reward": 40,
+        "max_reward": 250,
+        "cooldown_seconds": 60,
+        "insurance_cost": 20,
+        "tool": "mine",
+        "failure_text": "The tunnel collapsed...",
+    },
 }
 
 SUCCESS_FALLBACKS = {
@@ -60,7 +90,14 @@ class Activities(commands.Cog):
     # ------------------------------------------------------------- activities
 
     async def _run_activity(self, ctx: commands.Context, key: str) -> None:
-        success_rate, r_min, r_max, fail_text, tool, _cd = ACTIVITIES[key]
+        cfg = {**ACTIVITY_DEFAULTS[key], **activity_config(key)}
+        success_rate = float(cfg["success_rate"])
+        r_min = int(cfg["min_reward"])
+        r_max = int(cfg["max_reward"])
+        tool = cfg["tool"]
+        fail_text = cfg["failure_text"]
+        insurance = int(cfg.get("insurance_cost") or 0)
+
         user, guild = event_names(ctx.author, ctx.guild)
         async with self.bot.get_session() as session:
             tool_mult = await ItemService.tool_multiplier(session, ctx.author.id, tool)
@@ -82,15 +119,38 @@ class Activities(commands.Cog):
                     user=ctx.author,
                 )
             else:
+                # Failure: pay the configured insurance/health cost if any.
+                paid = 0
+                if insurance > 0:
+                    async with lock_manager.for_user(ctx.author.id):
+                        wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
+                        paid = min(insurance, wallet.balance or 0)
+                        if paid > 0:
+                            wallet.balance -= paid
+                            session.add(
+                                Transaction(
+                                    user_id=ctx.author.id,
+                                    type=f"{key}_insurance",
+                                    amount=-paid,
+                                    description=f"{key.title()} insurance",
+                                )
+                            )
+                            await session.commit()
+
+                message = event_message(
+                    f"{key}_failure",
+                    0,
+                    self.config.currency_name,
+                    user,
+                    guild,
+                    fallback=fail_text,
+                )
+                if paid > 0:
+                    message += f"\nInsurance covered the damage for {format_coins(paid)}."
+                elif insurance > 0:
+                    message += "\nYou had no coins to cover your insurance."
                 embed = EmbedBuilder.activity_embed(
-                    event_message(
-                        f"{key}_failure",
-                        0,
-                        self.config.currency_name,
-                        user,
-                        guild,
-                        fallback=fail_text,
-                    ),
+                    message,
                     color=COLOR_ERROR,
                     user=ctx.author,
                 )
@@ -100,25 +160,25 @@ class Activities(commands.Cog):
         await self._announce_achievements(ctx, new)
 
     @commands.command(name="hunt")
-    @check_cooldown("hunt", 45)
+    @check_cooldown("hunt", lambda: int(activity_config("hunt").get("cooldown_seconds", 45)))
     async def hunt(self, ctx: commands.Context):
-        """Hunt for wild game. 60% success, earn 30-180 💎️ (more with a rifle)."""
+        """Hunt for wild game. Success rate and rewards are configurable in config.json."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "hunt")
 
     @commands.command(name="fish", aliases=["fishing"])
-    @check_cooldown("fish", 45)
+    @check_cooldown("fish", lambda: int(activity_config("fish").get("cooldown_seconds", 45)))
     async def fish(self, ctx: commands.Context):
-        """Go fishing. 55% success, earn 20-150 💎️ (more with a rod)."""
+        """Go fishing. Success rate and rewards are configurable in config.json."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "fish")
 
     @commands.command(name="mine", aliases=["mining"])
-    @check_cooldown("mine", 60)
+    @check_cooldown("mine", lambda: int(activity_config("mine").get("cooldown_seconds", 60)))
     async def mine(self, ctx: commands.Context):
-        """Mine for ore. 50% success, earn 40-250 💎️ (more with a pickaxe)."""
+        """Mine for ore. Success rate and rewards are configurable in config.json."""
         if guard := await self._guard_error(ctx):
             return await ctx.send(guard)
         await self._run_activity(ctx, "mine")

@@ -31,11 +31,14 @@ Documentation:
 - Tools boost rewards: fishing rod → `!fish`, pickaxe → `!mine`, rifle → `!hunt`
 
 ### Casino (`cogs/casino.py`)
-- `!blackjack`, `!poker`, `!roulette`, `!slots`, `!coinflip`, `!dice`
+- `!blackjack`, `!poker`, `!roulette <amount> <bet>`, `!slots`, `!coinflip`, `!dice`
 - `!crash`, `!russianroulette`, `!war`, `!baccarat`, `!hilo`, `!keno`
+- Roulette bets: `!roulette 100 red`, `!roulette 100 even`, `!roulette 100 1-18`,
+  `!roulette 100 19-36`, `!roulette 100 0` (numbers 0-36, colors, odd/even, ranges)
 
 ### Admin (`cogs/admin_economy.py`)
-- `!add_money <user> <amount>`, `!reset_economy CONFIRM`
+- `!add-money <user> <amount> [cash|bank]`, `!reset_economy CONFIRM`
+- `!reloadconfig` — apply edits to `data/config.json` without a restart
 - `!econfig` / `!econfig set <key> <value>` — rewards, bet limits, tax rate, passive income, anti-alt
 - `!shopadd`, `!shopremove`, `!shoplist`, `!itemgive <user> <item> [qty]`
 - `!audit [n]` — admin action log
@@ -78,7 +81,9 @@ All commands also work as slash commands where marked hybrid (e.g. `/balance`, `
 
 ## Configuration
 
-All settings live in `utils/config.py` and can be overridden via `.env`:
+There are two layers of configuration:
+
+**1. `.env`** (via `utils/config.py`) — core bot settings:
 
 | Variable            | Default                    | Description                        |
 |---------------------|----------------------------|------------------------------------|
@@ -93,6 +98,30 @@ All settings live in `utils/config.py` and can be overridden via `.env`:
 | `WEEKLY_REWARD`     | `2000`                     | Reward for `!weekly`               |
 | `MONTHLY_REWARD`    | `5000`                     | Reward for `!monthly`              |
 | `CURRENCY_NAME`     | `💎`                        | Currency name used in event text   |
+
+**2. `data/config.json`** — gameplay tuning, editable any time. Run
+`!reloadconfig` (or restart the bot) to apply changes.
+
+| Section | What you can change |
+|---|---|
+| `activities.hunt/fish/mine` | success rate, min/max reward, cooldown, **insurance cost on failure** |
+| `activities.crime` | success rate, reward range, cooldown, crime list, **fine rate** (e.g. `0.02` = 2% of the user's current wallet on failure) |
+| `activities.rob` | success rate, robbery %, cap, cooldown, **fine rate on failure** |
+| `activities.search` | success rate, cooldown, searchable locations |
+| `activities.beg` | success rate, reward range, cooldown |
+| `shop.items` | the full item catalog — id, name, description, price, sell price, category, rarity, `stackable`, **`giveable`**, `consumable`, custom **`bought_message` / `used_message` / `gave_message`**, and `effects` (use actions: random money like a gift card, role grants, boosters, crates, tool multipliers) |
+
+Item message templates support `{item}`, `{qty}`, `{amount}`, `{user}`, and
+`{sender}` placeholders. Item use effects live in `effects`:
+
+```jsonc
+// Grant a role when the item is used (by name — per guild — or numeric id)
+"effects": { "role": "VIP" }
+// Random money like a gift card
+"effects": { "money_min": 100, "money_max": 600 }
+// Existing: tool multiplier, boosters, crates
+"effects": { "booster": { "type": "all", "multiplier": 2.0, "duration": 1800 } }
+```
 
 ## Project structure
 
@@ -114,6 +143,7 @@ services/
   guild.py             # Guild config overrides + audit log
 utils/
   config.py            # Canonical Config (pydantic-settings)
+  runtime_config.py    # data/config.json loader (activities + shop items)
   economy_utils.py     # DB helpers (add/transfer money, wallets)
   cooldowns.py         # Per-user cooldowns
   anti_fraud.py        # Bet/transfer fraud detection

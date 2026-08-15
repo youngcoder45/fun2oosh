@@ -34,6 +34,55 @@ from utils.helpers import (
     unix_ts,
 )
 from utils.pagination import PaginationView
+from utils.runtime_config import activity as activity_config
+from utils.runtime_config import fine_amount
+
+
+class ProfileView(discord.ui.View):
+    """Tabbed profile view (Components V2): Overview / Inventory / Achievements / Transactions."""
+
+    def __init__(self, cog: "Economy", target, owner_id: int):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.target = target
+        self.owner_id = owner_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only the command author or the profile owner can flip tabs."""
+        if interaction.user.id not in (self.owner_id, self.target.id):
+            await interaction.response.send_message(
+                "This profile is not yours to browse.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def _render(self, interaction: discord.Interaction, tab: str) -> None:
+        embed = await self.cog.profile_embed(self.target, tab)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Overview", style=discord.ButtonStyle.primary)
+    async def overview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._render(interaction, "overview")
+
+    @discord.ui.button(label="Inventory", style=discord.ButtonStyle.secondary)
+    async def inventory_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._render(interaction, "inventory")
+
+    @discord.ui.button(label="Achievements", style=discord.ButtonStyle.secondary)
+    async def achievements_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await self._render(interaction, "achievements")
+
+    @discord.ui.button(label="Transactions", style=discord.ButtonStyle.secondary)
+    async def transactions_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        await self._render(interaction, "transactions")
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True  # type: ignore[attr-defined]
 
 
 class Economy(commands.Cog):
@@ -582,16 +631,19 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=pages[0], view=view)
 
     @commands.command(name="beg", aliases=["b"])
-    @check_cooldown("beg", 60)  # 1 minute
+    @check_cooldown("beg", lambda: int(activity_config("beg").get("cooldown_seconds", 60)))
     async def beg(self, ctx: commands.Context):
-        """Beg for coins from strangers. 70% success rate, earn 10-100 coins. 1-minute cooldown."""
+        """Beg for coins from strangers. Success rate and reward are configurable in config.json."""
         import random
 
+        cfg = activity_config("beg")
         user, guild = event_names(ctx.author, ctx.guild)
 
-        # 70% chance to get coins
-        if random.random() < 0.7:
-            reward = random.randint(10, 100)
+        # Success rate + reward range from config.json
+        if random.random() < float(cfg.get("success_rate", 0.7)):
+            reward = random.randint(
+                int(cfg.get("min_reward", 10)), int(cfg.get("max_reward", 100))
+            )
 
             async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
@@ -613,25 +665,28 @@ class Economy(commands.Cog):
             await ctx.send(embed=embed)
 
     @commands.command(name="crime", aliases=["c"])
-    @check_cooldown("crime", 300)  # 5 minutes
+    @check_cooldown("crime", lambda: int(activity_config("crime").get("cooldown_seconds", 300)))
     async def crime(self, ctx: commands.Context):
-        """Commit a crime for big rewards! 40% success (300-2k coins), 60% fail (200-600 fine). 5-minute cooldown."""
+        """Commit a crime for big rewards! Success rate, rewards and fine are configurable in config.json."""
         import random
 
+        cfg = activity_config("crime")
         user, guild = event_names(ctx.author, ctx.guild)
 
-        # 40% success rate
-        success = random.random() < 0.4
-
-        crimes = [
-            ("robbed a bank", 500, 1500),
-            ("hacked a corporation", 800, 2000),
-            ("stole a rare painting", 600, 1800),
-            ("smuggled contraband", 400, 1200),
-            ("pickpocketed tourists", 300, 800),
+        # Success rate + crime pool from config.json
+        success = random.random() < float(cfg.get("success_rate", 0.4))
+        crimes = cfg.get("crimes") or [
+            {"description": "robbed a bank", "min_reward": 500, "max_reward": 1500},
+            {"description": "hacked a corporation", "min_reward": 800, "max_reward": 2000},
+            {"description": "stole a rare painting", "min_reward": 600, "max_reward": 1800},
+            {"description": "smuggled contraband", "min_reward": 400, "max_reward": 1200},
+            {"description": "pickpocketed tourists", "min_reward": 300, "max_reward": 800},
         ]
 
-        crime_desc, min_reward, max_reward = random.choice(crimes)
+        crime = random.choice(crimes)
+        crime_desc = crime["description"]
+        min_reward = int(crime.get("min_reward", 300))
+        max_reward = int(crime.get("max_reward", 2000))
 
         if ctx.guild is not None:
             async with self.bot.get_session() as session:
@@ -653,12 +708,19 @@ class Economy(commands.Cog):
             )
             await ctx.send(embed=embed)
         else:
-            fine = random.randint(200, 600)
-
             async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
-                if wallet.balance >= fine:
+                fine = fine_amount(cfg, wallet.balance or 0, 200, 600)
+                if fine > 0:
                     wallet.balance -= fine
+                    session.add(
+                        Transaction(
+                            user_id=ctx.author.id,
+                            type="crime_fail",
+                            amount=-fine,
+                            description=f"Crime fine: {crime_desc}",
+                        )
+                    )
                     await session.commit()
                     loss_msg = event_message(
                         "crime_failure", fine, self.config.currency_name, user, guild
@@ -678,11 +740,12 @@ class Economy(commands.Cog):
         await self._announce_achievements(ctx, new)
 
     @commands.command(name="rob", aliases=["steal"])
-    @check_cooldown("rob", 600)  # 10 minutes
+    @check_cooldown("rob", lambda: int(activity_config("rob").get("cooldown_seconds", 600)))
     async def rob(self, ctx: commands.Context, user: discord.User):
-        """Try to rob another user (risky!)."""
+        """Try to rob another user (risky!). Success rate and fine are configurable in config.json."""
         import random
 
+        cfg = activity_config("rob")
         if user == ctx.author:
             return await ctx.send("You can't rob yourself!")
 
@@ -698,21 +761,29 @@ class Economy(commands.Cog):
             robber_wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
             victim_wallet = await EconomyUtils.get_or_create_wallet(session, user.id)
 
-            # Need at least 200 coins to attempt robbery
-            if robber_wallet.balance < 200:
-                return await ctx.send("You need at least 200 coins to attempt a robbery!")
+            min_attempt = int(cfg.get("min_wallet_to_attempt", 200))
+            min_victim = int(cfg.get("min_victim_balance", 100))
+
+            # Need coins to attempt robbery
+            if (robber_wallet.balance or 0) < min_attempt:
+                return await ctx.send(
+                    f"You need at least {format_coins(min_attempt)} to attempt a robbery!"
+                )
 
             # Victim needs coins to rob
-            if victim_wallet.balance < 100:
+            if (victim_wallet.balance or 0) < min_victim:
                 return await ctx.send(f"{user.display_name} doesn't have enough coins to rob!")
 
-            # 35% success rate
-            success = random.random() < 0.35
+            # Success rate from config.json
+            success = random.random() < float(cfg.get("success_rate", 0.35))
 
             if success:
-                # Rob 10-30% of victim's balance
-                rob_amount = int(victim_wallet.balance * random.uniform(0.1, 0.3))
-                rob_amount = min(rob_amount, 5000)  # Cap at 5000
+                # Rob a configurable % of victim's balance, capped
+                rob_min = float(cfg.get("rob_min_percent", 0.1))
+                rob_max = float(cfg.get("rob_max_percent", 0.3))
+                rob_cap = int(cfg.get("rob_cap", 5000))
+                rob_amount = int(victim_wallet.balance * random.uniform(rob_min, rob_max))
+                rob_amount = min(rob_amount, rob_cap)
 
                 victim_wallet.balance -= rob_amount
                 robber_wallet.balance += rob_amount
@@ -740,9 +811,8 @@ class Economy(commands.Cog):
                 )
                 await ctx.send(embed=embed)
             else:
-                # Failed - lose 200-500 coins
-                fine = random.randint(200, 500)
-                fine = min(fine, robber_wallet.balance)
+                # Failed - lose a configurable % of your wallet (clamped)
+                fine = fine_amount(cfg, robber_wallet.balance or 0, 200, 500)
 
                 robber_wallet.balance -= fine
                 victim_wallet.balance += fine // 2  # Victim gets half
@@ -918,32 +988,36 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="search", aliases=["scavenge"])
-    @check_cooldown("search", 45)  # 45 seconds
+    @check_cooldown("search", lambda: int(activity_config("search").get("cooldown_seconds", 45)))
     async def search(self, ctx: commands.Context):
-        """Search random places for coins. 80% success rate, earn 5-120 coins from 8 locations. 45-second cooldown."""
+        """Search random places for coins. Success rate and locations are configurable in config.json."""
         import random
 
-        locations = [
-            ("couch cushions", 20, 80),
-            ("park bench", 30, 100),
-            ("parking lot", 15, 60),
-            ("vending machine", 25, 90),
-            ("library books", 10, 50),
-            ("trash bin", 5, 40),
-            ("car seats", 30, 110),
-            ("beach sand", 40, 120),
+        cfg = activity_config("search")
+        locations = cfg.get("locations") or [
+            {"name": "couch cushions", "min_reward": 20, "max_reward": 80},
+            {"name": "park bench", "min_reward": 30, "max_reward": 100},
+            {"name": "parking lot", "min_reward": 15, "max_reward": 60},
+            {"name": "vending machine", "min_reward": 25, "max_reward": 90},
+            {"name": "library books", "min_reward": 10, "max_reward": 50},
+            {"name": "trash bin", "min_reward": 5, "max_reward": 40},
+            {"name": "car seats", "min_reward": 30, "max_reward": 110},
+            {"name": "beach sand", "min_reward": 40, "max_reward": 120},
         ]
 
         user, guild = event_names(ctx.author, ctx.guild)
-        location, min_reward, max_reward = random.choice(locations)
+        location = random.choice(locations)
+        location_name = location["name"]
+        min_reward = int(location.get("min_reward", 10))
+        max_reward = int(location.get("max_reward", 100))
 
-        # 80% chance to find something
-        if random.random() < 0.8:
+        # Success rate from config.json
+        if random.random() < float(cfg.get("success_rate", 0.8)):
             reward = random.randint(min_reward, max_reward)
 
             async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
                 await EconomyUtils.add_money(
-                    session, ctx.author.id, reward, "search", f"Searched {location}"
+                    session, ctx.author.id, reward, "search", f"Searched {location_name}"
                 )
                 await session.commit()
 
@@ -963,61 +1037,132 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
         await self._announce_achievements(ctx, new)
 
-    @commands.command(name="profile", aliases=["prof", "stats"])
-    async def profile(self, ctx: commands.Context, user: Optional[discord.User] = None):
-        """View detailed profile and economy stats."""
-        target = user or ctx.author
+    # ----------------------------------------------------------------- profile
 
+    @commands.hybrid_command(
+        name="profile",
+        aliases=["prof", "stats"],
+        description="View a detailed profile with tabbed stats",
+    )
+    @app_commands.describe(user="View another user's profile")
+    async def profile(self, ctx: commands.Context, user: Optional[discord.User] = None):
+        """View a detailed profile (Overview / Inventory / Achievements / Transactions)."""
+        target = user or ctx.author
+        embed = await self.profile_embed(target, "overview")
+        view = ProfileView(self, target, owner_id=ctx.author.id)
+        await ctx.send(embed=embed, view=view)
+
+    async def profile_embed(self, target, tab: str = "overview") -> discord.Embed:
+        """Build one tab of the profile embed for ``target``."""
         async with self.bot.get_session() as session:
             wallet = await EconomyUtils.get_or_create_wallet(session, target.id)
 
-            # Get transaction count
             tx_stmt = select(func.count(Transaction.id)).where(Transaction.user_id == target.id)
-            tx_result = await session.execute(tx_stmt)
-            tx_count = tx_result.scalar() or 0
+            tx_count = (await session.execute(tx_stmt)).scalar() or 0
 
-            # Get total earned
             earn_stmt = select(func.sum(Transaction.amount)).where(
                 Transaction.user_id == target.id, Transaction.amount > 0
             )
-            earn_result = await session.execute(earn_stmt)
-            total_earned = earn_result.scalar() or 0
-            await session.commit()  # Persist wallet if it was just created
+            total_earned = (await session.execute(earn_stmt)).scalar() or 0
 
-        async with self.bot.get_session() as session:
-            achievement_count = await AchievementService.count(session, target.id)
             inv_rows = await ItemService.list_inventory(session, target.id)
             inv_count = sum(inv.quantity for inv, _ in inv_rows)
             inv_value = await ItemService.inventory_value(session, target.id)
+            achievement_count = await AchievementService.count(session, target.id)
+
+            txs: List[Transaction] = []
+            if tab == "transactions":
+                txs = list(
+                    (
+                        await session.execute(
+                            select(Transaction)
+                            .where(Transaction.user_id == target.id)
+                            .order_by(Transaction.id.desc())
+                            .limit(6)
+                        )
+                    ).scalars()
+                )
+            unlocked: set = set()
+            if tab == "achievements":
+                unlocked = set(await AchievementService.unlocked_ids(session, target.id))
+            await session.commit()  # Persist wallet if it was just created
 
         total_wealth = EconomyService.networth(wallet, inv_value)
+        avatar = target.display_avatar.url
 
-        embed = discord.Embed(
-            title=f"{target.display_name}'s Profile",
-            color=COLOR_INFO,
-        )
-        embed.set_thumbnail(url=target.display_avatar.url)
+        if tab == "inventory":
+            embed = discord.Embed(title=f"{target.display_name}'s Inventory", color=COLOR_INFO)
+            embed.set_thumbnail(url=avatar)
+            if not inv_rows:
+                embed.description = "Empty! Buy items with `!shop` / `!buy`."
+            else:
+                lines = []
+                for inv, item in inv_rows[:8]:
+                    lines.append(
+                        f"**{item.name}** x{inv.quantity} • {format_coins(item.price * inv.quantity)}"
+                    )
+                if len(inv_rows) > 8:
+                    lines.append(f"*…and {len(inv_rows) - 8} more*")
+                embed.description = "\n".join(lines)
+            embed.set_footer(text=f"{inv_count} items • worth {format_coins(inv_value)}")
+            return embed
+
+        if tab == "achievements":
+            embed = discord.Embed(
+                title=f"{target.display_name}'s Achievements",
+                color=discord.Color.gold(),
+            )
+            embed.set_thumbnail(url=avatar)
+            embed.description = f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked"
+            if not unlocked:
+                embed.description += "\nNo achievements unlocked yet — start earning!"
+            else:
+                lines = []
+                for aid, meta in ACHIEVEMENTS.items():
+                    if aid in unlocked:
+                        lines.append(f"✅ **{meta['name']}** — {meta['desc']}")
+                embed.description += "\n\n" + "\n".join(lines)
+            return embed
+
+        if tab == "transactions":
+            embed = discord.Embed(title=f"{target.display_name}'s Transactions", color=COLOR_INFO)
+            embed.set_thumbnail(url=avatar)
+            if not txs:
+                embed.description = "No transactions yet."
+            else:
+                lines = []
+                for tx in txs:
+                    sign = "+" if tx.amount >= 0 else ""
+                    lines.append(
+                        f"**{tx.type}** {sign}{tx.amount:,} • "
+                        f"*{tx.timestamp:%Y-%m-%d %H:%M} UTC*"
+                    )
+                embed.description = "\n".join(lines)
+            embed.set_footer(text=f"{tx_count} total transactions")
+            return embed
+
+        # ---------------------------------------------------------- overview
+        embed = discord.Embed(title=f"{target.display_name}'s Profile", color=COLOR_INFO)
+        embed.set_thumbnail(url=avatar)
 
         embed.add_field(
             name="Wealth",
             value=(
-                f"**Total:** {total_wealth:,} coins\n"
-                f"**Wallet:** {wallet.balance:,}\n"
-                f"**Bank:** {wallet.bank:,}"
+                f"**Total:** {format_coins(total_wealth)}\n"
+                f"**Wallet:** {format_coins(wallet.balance)}\n"
+                f"**Bank:** {format_coins(wallet.bank)}"
             ),
             inline=False,
         )
-
         embed.add_field(
             name="Statistics",
             value=(
                 f"**Transactions:** {tx_count}\n"
-                f"**Total Earned:** {total_earned:,} coins\n"
-                f"**Inventory:** {inv_count} items"
+                f"**Total Earned:** {format_coins(total_earned)}\n"
+                f"**Inventory:** {inv_count} items • {format_coins(inv_value)}"
             ),
             inline=False,
         )
-
         embed.add_field(
             name="Progression",
             value=(
@@ -1028,7 +1173,18 @@ class Economy(commands.Cog):
             ),
             inline=False,
         )
-        await ctx.send(embed=embed)
+        account_lines = []
+        if target.created_at:
+            account_lines.append(
+                f"**Account Created:** <t:{int(target.created_at.timestamp())}:D>"
+            )
+        joined_at = getattr(target, "joined_at", None)
+        if joined_at:
+            account_lines.append(f"**Joined Server:** <t:{int(joined_at.timestamp())}:D>")
+        if account_lines:
+            embed.add_field(name="Account", value="\n".join(account_lines), inline=False)
+        embed.set_footer(text="Browse the tabs below for more stats")
+        return embed
 
     @commands.command(name="transactions", aliases=["history", "tx", "logs"])
     async def transactions(
