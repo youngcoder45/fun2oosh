@@ -68,6 +68,10 @@
       "min_reward": 10,
       "max_reward": 100,
       "cooldown_seconds": 60
+    },
+    "work": {
+      "min_reward": 100,
+      "max_reward": 2000
     }
   },
   "shop": {
@@ -139,7 +143,24 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
-        "used_message": "You unwrapped **{item}** and found **{amount}**!",
+        "consumed_message": [
+          "You unwrapped **{item}** and ate it. Sweet! +**{amount}** 🍭",
+          "You ate **{item}** and it tasted like childhood. +**{amount}** 🍭",
+          "You licked **{item}** happily. Delicious — and worth **{amount}**! 🍭",
+          "You finished **{item}** in record time. +**{amount}** 🍭"
+        ],
+        "gave_message": [
+          "{sender} gave {user} a **{item}** as a sweet treat. 🍭",
+          "{sender} handed {user} a **{item}** — 'for someone cute'. 🍭",
+          "{sender} gifted {user} a **{item}** to cheer them up. 🍭",
+          "{sender} tossed {user} a **{item}**. Catch! 🍭"
+        ],
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. Sweet deal! 🍭",
+          "You traded away **{item}** for **{amount}**. 🍭",
+          "A collector bought your **{item}** for **{amount}**. 🍭",
+          "You cashed in **{item}** for **{amount}**. 🍭"
+        ],
         "effects": {
           "money_min": 10,
           "money_max": 50
@@ -158,6 +179,24 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
+        "consumed_message": [
+          "You sipped **{item}** and felt alive. +**{amount}** ☕",
+          "You drank **{item}** — extra energy, extra coins (**{amount}**) ☕",
+          "You enjoyed a warm cup of **{item}** and found **{amount}**! ☕",
+          "You gulped **{item}** and got a caffeine boost worth **{amount}**! ☕"
+        ],
+        "gave_message": [
+          "{sender} handed {user} a **{item}** to wake them up. ☕",
+          "{sender} bought {user} a **{item}** — 'you look like you need it'. ☕",
+          "{sender} gave {user} a **{item}** as a friendly gesture. ☕",
+          "{sender} passed {user} a **{item}** with a wink. ☕"
+        ],
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. ☕",
+          "You traded away **{item}** for **{amount}**. ☕",
+          "Someone paid **{amount}** for your **{item}**. ☕",
+          "You cashed in **{item}** for **{amount}**. ☕"
+        ],
         "effects": {
           "money_min": 50,
           "money_max": 200
@@ -176,6 +215,24 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
+        "consumed_message": [
+          "You ate **{item}** — extra cheesy! +**{amount}** 🍕",
+          "You devoured a slice of **{item}** and found **{amount}**! 🍕",
+          "You munched on **{item}**. Tasty and profitable: **{amount}**! 🍕",
+          "You ate **{item}** and it was delicious. You got **{amount}**! 🍕"
+        ],
+        "gave_message": [
+          "{sender} shared a **{item}** with {user}. 🍕",
+          "{sender} gave {user} a **{item}** — sharing is caring! 🍕",
+          "{sender} slid {user} a **{item}** under the table. 🍕",
+          "{sender} gifted {user} a **{item}**. Pizza solves everything! 🍕"
+        ],
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. 🍕",
+          "You traded away **{item}** for **{amount}**. 🍕",
+          "A hungry buyer paid **{amount}** for your **{item}**. 🍕",
+          "You cashed in **{item}** for **{amount}**. 🍕"
+        ],
         "effects": {
           "money_min": 150,
           "money_max": 400
@@ -194,6 +251,24 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
+        "consumed_message": [
+          "You chugged **{item}** and got an instant boost worth **{amount}**! ⚡",
+          "You downed **{item}** — heart racing, wallet growing: **{amount}**! ⚡",
+          "You drank **{item}** and felt unstoppable. +**{amount}** ⚡",
+          "You cracked open **{item}** and gained **{amount}** energy coins! ⚡"
+        ],
+        "gave_message": [
+          "{sender} gave {user} an **{item}** for the grind. ⚡",
+          "{sender} handed {user} an **{item}** — 'stay sharp'. ⚡",
+          "{sender} gifted {user} an **{item}** to keep them going. ⚡",
+          "{sender} tossed {user} an **{item}**. ⚡"
+        ],
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. ⚡",
+          "You traded away **{item}** for **{amount}**. ⚡",
+          "Someone paid **{amount}** for your **{item}**. ⚡",
+          "You cashed in **{item}** for **{amount}**. ⚡"
+        ],
         "effects": {
           "money_min": 300,
           "money_max": 700
@@ -212,12 +287,117 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
-        "bought_message": "You bought **{item}** — a perfect gift for someone special.",
-        "used_message": "You scratched off **{item}** and redeemed **{amount}**!",
-        "gave_message": "You handed **{item}** to {user}.",
+        "bought_message": [
+          "You bought **{item}** — a perfect gift for someone special. 🎁",
+          "You bought **{item}**. Who's the lucky one? 🎁",
+          "You bought **{item}** and tucked it away for later. 🎁",
+          "You bought **{item}** — curiosity sealed inside. 🎁"
+        ],
+        "used_message": [
+          "You scratched off **{item}** and redeemed **{amount}**! 🎁",
+          "You peeled the cover off **{item}** — **{amount}** revealed! 🎁",
+          "You redeemed **{item}** and got **{amount}**! 🎁",
+          "You used **{item}** — mystery solved for **{amount}**! 🎁"
+        ],
+        "gave_message": [
+          "{sender} handed **{item}** to {user} as a gift. 🎁",
+          "{sender} gave {user} a **{item}** — who knows what's inside! 🎁",
+          "{sender} gifted {user} a **{item}** for no reason at all. 🎁",
+          "{sender} slid {user} a **{item}** — 'just for you'. 🎁"
+        ],
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. 🎁",
+          "You traded **{item}** for **{amount}** — curiosity sold separately. 🎁",
+          "Someone paid **{amount}** for your **{item}**. 🎁",
+          "You cashed in **{item}** for **{amount}**. 🎁"
+        ],
         "effects": {
           "money_min": 100,
           "money_max": 600
+        }
+      },
+      {
+        "id": "cookie",
+        "name": "Cookie",
+        "description": "A fresh-baked chocolate chip cookie. Grants 25-100 coins.",
+        "price": 80,
+        "sell_price": 30,
+        "category": "consumable",
+        "rarity": "common",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "bought_message": [
+          "You bought a **{item}**. Warm and gooey — or is it for someone else? 🍪",
+          "You bought a **{item}** and the smell is irresistible. 🍪",
+          "You bought a **{item}**. Milk sold separately. 🍪",
+          "You bought a **{item}** — treat yourself! 🍪"
+        ],
+        "consumed_message": [
+          "You ate a **{item}** and it's very tasty! +**{amount}** 🍪",
+          "You dunked your **{item}** in milk and found **{amount}**! 🍪",
+          "You devoured **{item}** in one bite. Delicious! +**{amount}** 🍪",
+          "You ate a warm **{item}** and felt happiness worth **{amount}**. 🍪"
+        ],
+        "gave_message": [
+          "{sender} gave {user} a **{item}** — fresh from the oven! 🍪",
+          "{sender} handed {user} a **{item}** with a smile. 🍪",
+          "{sender} gifted {user} a **{item}** as a sweet surprise. 🍪",
+          "{sender} tossed {user} a **{item}** — catch! 🍪"
+        ],
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. 🍪",
+          "You traded **{item}** for **{amount}**. Sweet! 🍪",
+          "You cashed in **{item}** for **{amount}**. 🍪",
+          "A cookie monster paid **{amount}** for your **{item}**. 🍪"
+        ],
+        "effects": {
+          "money_min": 25,
+          "money_max": 100
+        }
+      },
+      {
+        "id": "cake",
+        "name": "Cake",
+        "description": "A slice of rich chocolate cake. Grants 200-500 coins.",
+        "price": 450,
+        "sell_price": 180,
+        "category": "consumable",
+        "rarity": "uncommon",
+        "stackable": true,
+        "giveable": true,
+        "consumable": true,
+        "limited": false,
+        "max_stack": 99,
+        "bought_message": [
+          "You bought a slice of **{item}**. Birthday? Or just Tuesday? 🎂",
+          "You bought **{item}** — someone's celebrating! 🎂",
+          "You bought a slice of **{item}** and it smells divine. 🎂",
+          "You bought **{item}**. Who's it for? 🎂"
+        ],
+        "consumed_message": [
+          "You ate a slice of **{item}** and it was heavenly! +**{amount}** 🎂",
+          "You devoured **{item}**. Worth every crumb: **{amount}**! 🎂",
+          "You enjoyed **{item}** with a cup of tea. Found **{amount}**! 🎂",
+          "You ate **{item}** and felt like royalty. +**{amount}** 🎂"
+        ],
+        "gave_message": [
+          "{sender} gave {user} a slice of **{item}**. Celebration time! 🎂",
+          "{sender} handed {user} **{item}** — 'happy unbirthday'! 🎂",
+          "{sender} gifted {user} **{item}** to sweeten their day. 🎂",
+          "{sender} shared **{item}** with {user}. Sharing is caring! 🎂"
+        ],
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. 🎂",
+          "You traded **{item}** for **{amount}**. Sweet deal! 🎂",
+          "You cashed in **{item}** for **{amount}**. 🎂",
+          "A bakery bought your **{item}** for **{amount}**. 🎂"
+        ],
+        "effects": {
+          "money_min": 200,
+          "money_max": 500
         }
       },
       {
@@ -326,21 +506,29 @@
         "consumable": true,
         "limited": false,
         "max_stack": 99,
-        "bought_message": "You bought {item}. Whom are you gonna give it to? 👀",
+        "bought_message": [
+          "You bought **{item}**. Whom are you gonna give it to? 👀",
+          "You bought **{item}** — someone's about to blush. 🌹",
+          "You bought **{item}** and immediately felt romantic. 🌹",
+          "You bought **{item}**. Your heart says it's for someone special. 🌹"
+        ],
         "used_message": [
           "You used the rose to make a bouquet.",
           "You sniffed the rose and it smells amazing.",
           "You pressed the rose into your favorite book.",
-          "You turned the rose into a tiny crown.",
-          "You gave the rose a dramatic speech before keeping it.",
-          "You used the rose to ask the mirror on a date."
+          "You turned the rose into a tiny crown."
         ],
         "gave_message": [
           "{sender} just gave {user} a rose.",
           "{sender} handed {user} a beautiful rose.",
           "A rose from {sender} to {user} — how romantic!",
-          "{sender} tossed {user} a rose.",
-          "{sender} gifted {user} a rose, and someone blushed."
+          "{sender} tossed {user} a rose."
+        ],
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. A little sad, but okay. 🌹",
+          "You traded **{item}** for **{amount}**. 🌹",
+          "You sold your **{item}** — love doesn't pay the bills, apparently. 🌹",
+          "You cashed in **{item}** for **{amount}**. 🌹"
         ]
       },
       {
@@ -355,7 +543,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. The party's over... for now. 📻",
+          "You traded **{item}** for **{amount}**. 📻",
+          "You cashed in **{item}** for **{amount}**. 📻",
+          "Someone paid **{amount}** for your **{item}**. Nice. 📻"
+        ]
       },
       {
         "id": "medal",
@@ -369,7 +563,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold your **{item}** for **{amount}**. Honor has a price. 🎖️",
+          "You traded **{item}** for **{amount}**. 🎖️",
+          "You cashed in **{item}** for **{amount}**. 🎖️",
+          "A museum bought your **{item}** for **{amount}**. 🎖️"
+        ]
       },
       {
         "id": "ring",
@@ -383,7 +583,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. Someone's heart just broke. 💍",
+          "You traded **{item}** for **{amount}**. 💍",
+          "You cashed in **{item}** for **{amount}**. 💍",
+          "A jeweler paid **{amount}** for your **{item}**. 💍"
+        ]
       },
       {
         "id": "gem",
@@ -397,7 +603,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. Shiny! 💎",
+          "You traded **{item}** for **{amount}**. 💎",
+          "You cashed in **{item}** for **{amount}**. 💎",
+          "A collector paid **{amount}** for your **{item}**. 💎"
+        ]
       },
       {
         "id": "watch",
@@ -411,7 +623,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. Time is money. ⌚",
+          "You traded **{item}** for **{amount}**. ⌚",
+          "You cashed in **{item}** for **{amount}**. ⌚",
+          "Someone paid **{amount}** for your **{item}**. ⌚"
+        ]
       },
       {
         "id": "trophy",
@@ -425,7 +643,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. Winning feels good, selling feels better. 🏆",
+          "You traded **{item}** for **{amount}**. 🏆",
+          "You cashed in **{item}** for **{amount}**. 🏆",
+          "A collector paid **{amount}** for your **{item}**. 🏆"
+        ]
       },
       {
         "id": "crown",
@@ -439,7 +663,13 @@
         "giveable": true,
         "consumable": false,
         "limited": true,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. The king has left the building. 👑",
+          "You traded **{item}** for **{amount}**. 👑",
+          "You cashed in **{item}** for **{amount}**. 👑",
+          "A royal collector paid **{amount}** for your **{item}**. 👑"
+        ]
       },
       {
         "id": "golden_egg",
@@ -453,7 +683,13 @@
         "giveable": true,
         "consumable": false,
         "limited": false,
-        "max_stack": 99
+        "max_stack": 99,
+        "sold_message": [
+          "You sold **{item}** for **{amount}**. Don't count your chickens... 🥚",
+          "You traded **{item}** for **{amount}**. 🥚",
+          "You cashed in **{item}** for **{amount}**. 🥚",
+          "Someone paid **{amount}** for your **{item}**. 🥚"
+        ]
       }
     ]
   }

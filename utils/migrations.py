@@ -39,7 +39,9 @@ COLUMN_MIGRATIONS: Dict[str, List[Tuple[str, str]]] = {
         ('giveable', 'BOOLEAN DEFAULT 1'),
         ('bought_message', 'TEXT'),
         ('used_message', 'TEXT'),
+        ('consumed_message', 'TEXT'),
         ('gave_message', 'TEXT'),
+        ('sold_message', 'TEXT'),
     ],
 }
 

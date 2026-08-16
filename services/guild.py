@@ -21,7 +21,8 @@ SETTINGS: dict = {
     "monthly_reward": ("int", 1, 200_000_000, "monthly reward"),
     "tax_rate": ("float", 0, 0.5, "transfer tax rate"),
     "min_bet": ("int", 1, 1_000_000_000, "minimum bet"),
-    "max_bet": ("int", 1, 1_000_000_000, "maximum bet"),
+    # max_bet: 0 = unlimited (no cap on a single bet)
+    "max_bet": ("int", 0, 1_000_000_000, "maximum bet"),
     "daily_wager_limit": ("int", 1, 1_000_000_000, "daily wager limit"),
     "passive_income": ("int", 0, 1_000_000, "hourly passive income"),
     "anti_alt": ("bool", None, None, "anti-alt protection"),
@@ -89,15 +90,15 @@ class GuildConfigService:
         old = getattr(row, key, None)
         setattr(row, key, value)
 
-        # Cross-field validation: min_bet must not exceed max_bet
+        # Cross-field validation: min_bet must not exceed max_bet (0 = unlimited)
         if key == "min_bet":
             max_bet = row.max_bet if row.max_bet is not None else defaults.max_bet
-            if value > max_bet:
+            if max_bet and value > max_bet:
                 setattr(row, key, old)
                 return False, f"`min_bet` cannot exceed `max_bet` ({max_bet})."
         if key == "max_bet":
             min_bet = row.min_bet if row.min_bet is not None else defaults.min_bet
-            if value < min_bet:
+            if value and value < min_bet:
                 setattr(row, key, old)
                 return False, f"`max_bet` cannot be below `min_bet` ({min_bet})."
 

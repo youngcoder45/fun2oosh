@@ -36,7 +36,13 @@ class Item(Base):
     # Placeholders: {item}, {qty}, {amount}, {user}, {sender}.
     bought_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     used_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    consumed_message: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # shown by !eat (food-style), random pick from a list
     gave_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sold_message: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # shown by !sell, random pick from a list
     limited: Mapped[bool] = mapped_column(
         Boolean, default=False
     )  # not sold in shop (crate/event only)

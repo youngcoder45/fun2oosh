@@ -34,7 +34,8 @@ class Config(BaseSettings):
 
     # Economy/Game settings
     min_bet: int = Field(default=10)
-    max_bet: int = Field(default=10000)
+    # 0 = no upper limit on a single bet (unlimited)
+    max_bet: int = Field(default=0)
     daily_wager_limit: int = Field(default=50000)
     work_reward: int = Field(default=100)
     daily_reward: int = Field(default=500)

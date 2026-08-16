@@ -35,7 +35,7 @@ from utils.helpers import (
 )
 from utils.pagination import PaginationView
 from utils.runtime_config import activity as activity_config
-from utils.runtime_config import fine_amount
+from utils.runtime_config import activity_value, fine_amount
 
 
 class ProfileView(discord.ui.View):
@@ -135,12 +135,8 @@ class Economy(commands.Cog):
     @commands.command(name="work")
     @check_cooldown("work", 1800)  # 30 minutes
     async def work(self, ctx: commands.Context):
-        """Work to earn some coins."""
-        reward = self.config.work_reward
-        if ctx.guild is not None:
-            async with self.bot.get_session() as session:
-                guild_cfg = await GuildConfigService.get(session, ctx.guild.id)
-                reward = GuildConfigService.effective(guild_cfg, self.config, "work_reward")
+        """Work to earn some coins (random reward)."""
+        reward = await self._resolve_work_reward(ctx.guild)
 
         async with self.bot.get_session() as session:
             final = await EconomyService.reward(
@@ -163,11 +159,7 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 1800, key=lambda i: (i.guild_id, i.user.id))
     async def work_slash(self, interaction: discord.Interaction):
         """Slash command for work."""
-        reward = self.config.work_reward
-        if interaction.guild is not None:
-            async with self.bot.get_session() as session:
-                guild_cfg = await GuildConfigService.get(session, interaction.guild.id)
-                reward = GuildConfigService.effective(guild_cfg, self.config, "work_reward")
+        reward = await self._resolve_work_reward(interaction.guild)
 
         async with self.bot.get_session() as session:
             final = await EconomyService.reward(
@@ -187,6 +179,25 @@ class Economy(commands.Cog):
                 "An error occurred while processing your work reward."
             )
         await self._announce_achievements(ctx=interaction, new=new)
+
+    async def _resolve_work_reward(self, guild) -> int:
+        """Resolve the !work reward.
+
+        A per-guild ``work_reward`` override (set via ``!econfig``) wins;
+        otherwise the reward is random in the ``activities.work`` range from
+        ``data/config.json`` (default 100-2000).
+        """
+        if guild is not None:
+            async with self.bot.get_session() as session:
+                guild_cfg = await GuildConfigService.get(session, guild.id)
+                if guild_cfg.work_reward is not None:
+                    return guild_cfg.work_reward
+        import random
+
+        return random.randint(
+            activity_value("work", "min_reward", 100),
+            activity_value("work", "max_reward", 2000),
+        )
 
     @commands.command(name="collect", aliases=["claim"])
     async def collect(self, ctx: commands.Context):
@@ -562,7 +573,7 @@ class Economy(commands.Cog):
             desc = f"You transferred {format_coins(amount)} to {user.mention}."
             if tax:
                 desc += f"\n*Transfer tax: {format_coins(tax)}*"
-            embed = EmbedBuilder.success_embed("Transfer Successful", desc)
+            embed = EmbedBuilder.activity_embed(desc, user=ctx.author)
             await ctx.send(embed=embed)
         else:
             await ctx.send("Transfer failed. Check your balance and try again.")
@@ -607,7 +618,7 @@ class Economy(commands.Cog):
             desc = f"You transferred {format_coins(amount)} to {user.mention}."
             if tax:
                 desc += f"\n*Transfer tax: {format_coins(tax)}*"
-            embed = EmbedBuilder.success_embed("Transfer Successful", desc)
+            embed = EmbedBuilder.activity_embed(desc, user=interaction.user)
             await interaction.response.send_message(embed=embed)
         else:
             await interaction.response.send_message(
@@ -958,18 +969,14 @@ class Economy(commands.Cog):
         for start in range(0, len(users), per_page):
             embed = discord.Embed(title="Richest Players", color=COLOR_INFO)
             for idx, user_data in enumerate(users[start : start + per_page], start=start + 1):
-                user = self.bot.get_user(user_data.user_id)
-                name = user.display_name if user is not None else f"<@{user_data.user_id}>"
                 embed.add_field(
-                    name=f"#{idx} {name}",
+                    name=f"#{idx} <@{user_data.user_id}>",
                     value=(
-                        f"Total: **{user_data.total:,}** coins\n"
+                        f"Total: **{user_data.total:,}** coins • "
                         f"Wallet: {user_data.balance:,} • Bank: {user_data.bank:,}"
                     ),
-                    inline=True,
+                    inline=False,
                 )
-                if idx % 2 == 0:
-                    embed.add_field(name="\u200b", value="\u200b", inline=False)
             embed.set_footer(
                 text=f"Page {start // per_page + 1}/{(len(users) - 1) // per_page + 1}"
             )
@@ -1352,7 +1359,7 @@ class Economy(commands.Cog):
     def _collect_embed(breakdown: List[Tuple[str, int, int]], user) -> discord.Embed:
         """UnbelievaBoat-style role-income embed: success line + numbered roles."""
         lines = "\n".join(
-            f"{i} - <@&{role_id}> {earned:,} (coins)"
+            f"{i} - <@&{role_id}> {earned:,} 💎"
             for i, (_source, earned, role_id) in enumerate(breakdown, start=1)
         )
         embed = discord.Embed(

@@ -26,8 +26,11 @@ Documentation:
 
 ### Shop & Inventory (`cogs/shop.py`)
 - `!shop [category]`, `!buy <item> [qty]`, `!sell <item> [qty]`, `!iteminfo <item>`
-- `!inventory` / `!inv`, `!giveitem <user> <item> [qty]`, `!trade <user> <item> [qty]`
+- `!inventory` / `!inv`, `!giveitem <user> <item> [qty]`, `!trade <user> <item> [qty] [price]`
+  — add a custom `price` (coins per item) to sell an item for coins instead of swapping
+  (e.g. `!trade @user rose 1 5` offers a rose for 5 💎; the other user presses **Accept** to pay)
 - `!use <item>` — consumables (coins), **boosters** (1.5x/2x money), **crates/lootboxes**
+- `!eat <item>` — eat food-style consumables (items with a `consumed_message`)
 - Tools boost rewards: fishing rod → `!fish`, pickaxe → `!mine`, rifle → `!hunt`
 
 ### Casino (`cogs/casino.py`)
@@ -94,9 +97,9 @@ There are two layers of configuration:
 | `OWNER_ID`          | —                          | Owner Discord ID (admin commands)  |
 | `DATABASE_URL`      | `sqlite+aiosqlite:///fun2oosh.db` | SQLAlchemy async DB URL     |
 | `COMMAND_PREFIX`    | `!`                        | Text command prefix                |
-| `MIN_BET` / `MAX_BET` | `10` / `10000`           | Betting limits                     |
+| `MIN_BET` / `MAX_BET` | `10` / `0`                | Betting limits (`MAX_BET=0` = unlimited) |
 | `DAILY_WAGER_LIMIT` | `50000`                    | Max wagered per day                |
-| `WORK_REWARD`       | `100`                      | Reward for `!work`                 |
+| `WORK_REWARD`       | `100`                      | Legacy — `!work` is now random (100–2000) via `activities.work` in `data/config.json` |
 | `DAILY_REWARD`      | `500`                      | Reward for `!daily`                |
 | `WEEKLY_REWARD`     | `2000`                     | Reward for `!weekly`               |
 | `MONTHLY_REWARD`    | `5000`                     | Reward for `!monthly`              |
@@ -112,16 +115,32 @@ There are two layers of configuration:
 | `activities.rob` | success rate, robbery %, cap, cooldown, **fine rate on failure** |
 | `activities.search` | success rate, cooldown, searchable locations |
 | `activities.beg` | success rate, reward range, cooldown |
-| `shop.items` | the full item catalog — id, name, description, price, sell price, category, rarity, `stackable`, **`giveable`**, `consumable`, custom **`bought_message` / `used_message` / `gave_message`**, and `effects` (use actions: random money like a gift card, role grants, boosters, crates, tool multipliers) |
+| `activities.work` | min/max random reward for `!work` (default 100–2000; a per-guild `!econfig work_reward` still pins a fixed value) |
+| `shop.items` | the full item catalog — id, name, description, price, sell price, category, rarity, `stackable`, **`giveable`**, `consumable`, custom **`bought_message` / `used_message` / `consumed_message` / `gave_message` / `sold_message`**, and `effects` (use actions: random money like a gift card, role grants, boosters, crates, tool multipliers) |
 
-`bought_message` / `used_message` / `gave_message` accept **one string or an
-array of strings** — an array picks a random line every time the event
-happens (e.g. five different "you used the rose…" messages). Message
-placeholders: `{item}`, `{qty}`, `{amount}`, `{user}`, `{sender}`, and
-`{user_mention}` / `{sender_mention}` for `gave_message`.
+Every message field is **per item** and accepts **one string or an array of
+strings** — an array picks a random line every time the event happens (e.g.
+four different "you used the rose…" messages). Each action has its own field,
+so one item can carry a different message set for every command:
+
+| Field | Command | Example |
+|---|---|---|
+| `bought_message` | `!buy` | "You bought {item}. Whom are you gonna give it to? 👀" |
+| `used_message` | `!use` | "You used the rose to make a bouquet." |
+| `consumed_message` | `!eat` | "You ate a cookie and it's very tasty!" |
+| `gave_message` | `!giveitem` | "{sender} just gave {user} a rose." |
+| `sold_message` | `!sell` | "You sold {item} for {amount}." |
+
+Message placeholders: `{item}`, `{qty}`, `{amount}` (formatted coins),
+`{user}`, `{sender}`, and `{user_mention}` / `{sender_mention}` for
+`gave_message`. `{amount}` is only filled when the action actually granted
+coins, so you can write "+**{amount}**" in eat messages for food items.
 
 ```jsonc
-"bought_message": "You bought {item}. Whom are you gonna give it to? 👀",
+"bought_message": [
+  "You bought {item}. Whom are you gonna give it to? 👀",
+  "You bought {item} — someone's about to blush. 🌹"
+],
 "used_message": [
   "You used the rose to make a bouquet.",
   "You sniffed the rose and it smells amazing."
@@ -129,6 +148,19 @@ placeholders: `{item}`, `{qty}`, `{amount}`, `{user}`, `{sender}`, and
 "gave_message": [
   "{sender} just gave {user} a rose.",
   "{sender} tossed {user} a rose."
+],
+"sold_message": [
+  "You sold {item} for {amount}. A little sad, but okay. 🌹"
+]
+```
+
+A food-style consumable (like Cookie or Cake) also sets `consumed_message`
+so `!eat` shows eating flavor instead of `!use`'s message:
+
+```jsonc
+"consumed_message": [
+  "You ate a {item} and it's very tasty! +**{amount}** 🍪",
+  "You dunked your {item} in milk and found **{amount}**! 🍪"
 ]
 ```
 

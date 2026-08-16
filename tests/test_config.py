@@ -69,6 +69,7 @@ async def main() -> None:
             gift = await ItemService.get(session, "gift_card")
             assert gift is not None
             assert gift.bought_message and gift.used_message and gift.gave_message
+            assert gift.sold_message is not None and gift.sold_message.startswith("[")
             rose = await ItemService.get(session, "rose")
             assert rose is not None
             assert rose.consumable and rose.giveable and not rose.limited
@@ -76,7 +77,16 @@ async def main() -> None:
             assert "Whom are you gonna give it to" in rose.bought_message
             assert rose.used_message is not None and rose.used_message.startswith("[")
             assert rose.gave_message is not None and rose.gave_message.startswith("[")
-            print("OK item sync (idempotent, custom messages + giveable)")
+            assert rose.sold_message is not None and rose.sold_message.startswith("[")
+            cookie = await ItemService.get(session, "cookie")
+            cake = await ItemService.get(session, "cake")
+            assert cookie is not None and cake is not None
+            assert cookie.consumable and cookie.giveable
+            assert cake.consumable and cake.giveable
+            assert cookie.consumed_message is not None and cookie.consumed_message.startswith("[")
+            assert cookie.sold_message is not None and cookie.sold_message.startswith("[")
+            assert cake.consumed_message is not None and cake.consumed_message.startswith("[")
+            print("OK item sync (idempotent, custom messages + giveable + eatable)")
 
         # 4. message templates fill known placeholders, keep unknown ones
         assert (
@@ -114,6 +124,47 @@ async def main() -> None:
         assert single == "You bought Rose.", single
         assert render_item_message(None, item="x") is None
         print("OK random message sets (used/gave)")
+
+        # 5b. consumed (eat) and sold message sets: random pick, placeholders fill
+        async with bot.session_factory() as session:
+            lollipop = await ItemService.get(session, "lollipop")
+        assert lollipop is not None
+        assert lollipop.consumed_message and lollipop.sold_message
+        consumed_choices = json.loads(lollipop.consumed_message)
+        sold_choices = json.loads(lollipop.sold_message)
+        assert len(consumed_choices) >= 3 and len(sold_choices) >= 3
+        expected_consumed = {
+            format_template(c, item="Lollipop", amount="30 💎️") for c in consumed_choices
+        }
+        consumed_rendered = {
+            m
+            for m in (
+                render_item_message(
+                    lollipop.consumed_message, item="Lollipop", amount="30 💎️"
+                )
+                for _ in range(200)
+            )
+            if m
+        }
+        assert consumed_rendered and consumed_rendered <= expected_consumed, consumed_rendered
+        assert all("Lollipop" in m and "30 💎️" in m for m in consumed_rendered)
+        sold_rendered = {
+            m
+            for m in (
+                render_item_message(
+                    lollipop.sold_message, item="Lollipop", amount="15 💎️"
+                )
+                for _ in range(200)
+            )
+            if m
+        }
+        assert sold_rendered and sold_rendered <= {
+            format_template(c, item="Lollipop", amount="15 💎️") for c in sold_choices
+        }, sold_rendered
+        # {amount} stays literal when the effect granted no coins
+        no_amount = render_item_message("You ate {item} for {amount}.", item="Cake")
+        assert no_amount is not None and "{amount}" in no_amount
+        print("OK consumed/sold message sets (eat + sell flavors)")
 
         # 6. roulette bet parsing (new !roulette <amount> <bet> signature)
         assert parse_roulette_bet("red") == ("red", None)

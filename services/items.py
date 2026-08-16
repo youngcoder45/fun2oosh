@@ -116,7 +116,9 @@ class ItemService:
                 effects=json.dumps(row["effects"]) if row.get("effects") else None,
                 bought_message=_message_field(row.get("bought_message")),
                 used_message=_message_field(row.get("used_message")),
+                consumed_message=_message_field(row.get("consumed_message")),
                 gave_message=_message_field(row.get("gave_message")),
+                sold_message=_message_field(row.get("sold_message")),
             )
             existing = await ItemService.get(session, item_id)
             if existing is not None:
@@ -279,15 +281,19 @@ class ItemService:
         user_id: int,
         item: Item,
         ctx=None,
-    ) -> Tuple[bool, str]:
+    ) -> Tuple[bool, str, Optional[int]]:
         """Consume one unit of a consumable item and apply its effects.
 
         ``ctx`` is required for effects that need a guild (e.g. adding a
-        role). Returns ``(success, message)``. Runs entirely under the user
-        lock; the item is only consumed after every effect succeeded.
+        role). Returns ``(success, message, money_amount)`` where
+        ``money_amount`` is the coin amount granted by the effect (``None``
+        when the effect didn't grant coins, e.g. boosters/crates) so the
+        command layer can fill the ``{amount}`` placeholder in custom
+        messages. Runs entirely under the user lock; the item is only
+        consumed after every effect succeeded.
         """
         if not item.consumable:
-            return False, "That item can't be used."
+            return False, "That item can't be used.", None
 
         effects = {}
         if item.effects:
@@ -299,11 +305,13 @@ class ItemService:
         async with lock_manager.for_user(user_id):
             inv = await ItemService._get_inv(session, user_id, item.id)
             if inv is None or inv.quantity < 1:
-                return False, "You don't have that item."
+                return False, "You don't have that item.", None
 
             # --- apply effects -------------------------------------------
+            money_amount: Optional[int] = None
             if "money_min" in effects:
                 amount = random.randint(effects["money_min"], effects["money_max"])
+                money_amount = amount
                 await EconomyUtils.add_money(session, user_id, amount, "item", f"Used {item.name}")
                 msg = f"You used **{item.name}** and got **{amount:,} 💎️**!"
 
@@ -312,7 +320,7 @@ class ItemService:
                     session, user_id, item, effects, ctx
                 )
                 if not role_ok:
-                    return False, msg
+                    return False, msg, None
 
             elif "booster" in effects:
                 booster = effects["booster"]
@@ -333,13 +341,13 @@ class ItemService:
                 msg = f"You used **{item.name}**."
 
             else:
-                return False, "This item has no usable effect."
+                return False, "This item has no usable effect.", None
 
             inv.quantity -= 1
             if inv.quantity <= 0:
                 await session.delete(inv)
             await session.commit()
-            return True, msg
+            return True, msg, money_amount
 
     @staticmethod
     async def _apply_role_effect(

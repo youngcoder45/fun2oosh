@@ -1,7 +1,7 @@
 """
 Shop & inventory cog.
 
-Commands: shop, buy, sell, use, inventory, giveitem, trade, iteminfo.
+Commands: shop, buy, sell, use, eat, inventory, giveitem, trade, iteminfo.
 """
 
 import time
@@ -99,13 +99,16 @@ class ShopView(discord.ui.View):
 
 
 class TradeOffer:
-    __slots__ = ("initiator", "partner", "item_id", "qty", "at", "message", "view")
+    __slots__ = ("initiator", "partner", "item_id", "qty", "price", "at", "message", "view")
 
-    def __init__(self, initiator: int, partner: int, item_id: str, qty: int):
+    def __init__(
+        self, initiator: int, partner: int, item_id: str, qty: int, price: Optional[int] = None
+    ):
         self.initiator = initiator
         self.partner = partner
         self.item_id = item_id
         self.qty = qty
+        self.price = price  # coins per item; None = item-for-item trade
         self.at = time.monotonic()
         self.message: Optional[discord.Message] = None
         self.view: Optional[TradeOfferView] = None
@@ -158,6 +161,106 @@ class TradeOfferView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
 
+    async def _fail_priced(
+        self, interaction: discord.Interaction, offer: TradeOffer, note: str
+    ) -> None:
+        """Abort a priced offer (e.g. the item vanished): remove it and annotate."""
+        if offer in self.cog.trades:
+            self.cog.trades.remove(offer)
+        self.disable_all()
+        message = interaction.message
+        embed = None
+        if message is not None and message.embeds:
+            embed = message.embeds[0].copy()
+            embed.description = f"{embed.description or ''}\n\n*{note}*"
+        if message is not None:
+            try:
+                await message.edit(embed=embed, view=self)
+            except discord.HTTPException:
+                pass
+        await interaction.followup.send(note, ephemeral=True)
+        self.stop()
+
+    async def _complete_priced(self, interaction: discord.Interaction) -> None:
+        """Complete a priced offer: the recipient pays ``price * qty`` coins.
+
+        Runs atomically under both users' locks; the item only moves after
+        the payment is guaranteed.
+        """
+        offer = self.offer
+        price = offer.price
+        if price is None:
+            return
+        total = price * offer.qty
+        await interaction.response.defer()
+
+        async with self.cog.bot.get_session() as session:
+            item = await ItemService.get(session, offer.item_id)
+            if item is None:
+                return await self._fail_priced(interaction, offer, "The offered item no longer exists.")
+            async with lock_manager.for_users(offer.initiator, offer.partner):
+                sender_inv = await ItemService._get_inv(session, offer.initiator, item.id)
+                if sender_inv is None or sender_inv.quantity < offer.qty:
+                    return await self._fail_priced(
+                        interaction, offer, "The seller no longer has that item."
+                    )
+                buyer_wallet = await EconomyUtils.get_or_create_wallet(session, offer.partner)
+                if buyer_wallet.balance < total:
+                    return await interaction.followup.send(
+                        f"You need {format_coins(total)} but only have "
+                        f"{format_coins(buyer_wallet.balance)}.",
+                        ephemeral=True,
+                    )
+                seller_wallet = await EconomyUtils.get_or_create_wallet(session, offer.initiator)
+
+                sender_inv.quantity -= offer.qty
+                if sender_inv.quantity <= 0:
+                    await session.delete(sender_inv)
+                await ItemService._grant_raw(session, offer.partner, item, offer.qty)
+                buyer_wallet.balance -= total
+                seller_wallet.balance += total
+                session.add(
+                    Transaction(
+                        user_id=offer.partner,
+                        type="trade",
+                        amount=-total,
+                        description=f"Bought {item.name} x{offer.qty} from <@{offer.initiator}>",
+                    )
+                )
+                session.add(
+                    Transaction(
+                        user_id=offer.initiator,
+                        type="trade",
+                        amount=total,
+                        description=f"Traded {item.name} x{offer.qty} for coins",
+                    )
+                )
+                await session.commit()
+
+        if offer in self.cog.trades:
+            self.cog.trades.remove(offer)
+        self.disable_all()
+        message = interaction.message
+        embed = None
+        if message is not None and message.embeds:
+            embed = message.embeds[0].copy()
+            embed.description = (
+                f"{embed.description or ''}\n\n*Trade complete — {interaction.user.mention} "
+                f"paid {format_coins(total)} for **{item.name}** x{offer.qty}.*"
+            )
+        if message is not None:
+            try:
+                await message.edit(embed=embed, view=self)
+            except discord.HTTPException:
+                pass
+        self.stop()
+        completion = EmbedBuilder.success_embed(
+            "Trade Complete!",
+            f"You paid {format_coins(total)} and received **{item.name}** x{offer.qty} "
+            f"from <@{offer.initiator}>.",
+        )
+        await interaction.followup.send(embed=completion)
+
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.secondary)
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.offer.partner:
@@ -168,6 +271,8 @@ class TradeOfferView(discord.ui.View):
             return await interaction.response.send_message(
                 "This offer has expired.", ephemeral=True
             )
+        if self.offer.price:
+            return await self._complete_priced(interaction)
         await self._close(
             interaction,
             f"{interaction.user.mention} accepted. Send your item with "
@@ -367,10 +472,20 @@ class Shop(commands.Cog):
                 )
                 await session.commit()
 
-            embed = EmbedBuilder.success_embed(
-                "Sold!",
-                f"You sold **{item.name}** x{qty} for {format_coins(total)}.",
-            )
+            description = f"You sold **{item.name}** x{qty} for {format_coins(total)}."
+            if item.sold_message:
+                description = (
+                    render_item_message(
+                        item.sold_message,
+                        item=item.name,
+                        qty=qty,
+                        amount=format_coins(total),
+                        user=ctx.author.display_name,
+                        sender=ctx.author.display_name,
+                    )
+                    or description
+                )
+            embed = EmbedBuilder.success_embed("Sold!", description)
             await ctx.send(embed=embed)
 
     # ---------------------------------------------------------------- usage
@@ -383,18 +498,42 @@ class Shop(commands.Cog):
             item = await ItemService.get(session, item_id.lower())
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
-            ok, msg = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
+            ok, msg, amount = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
             if not ok:
                 return await ctx.send(msg)
             if item.used_message:
                 msg = (
-                    render_item_message(
-                        item.used_message,
-                        item=item.name,
-                        user=ctx.author.display_name,
+                    self._render_message(
+                        item.used_message, item=item, amount=amount, user=ctx.author
                     )
                     or msg
                 )
+            embed = EmbedBuilder.success_embed(f"{item.name}", msg)
+            await ctx.send(embed=embed)
+
+            new = await AchievementService.check(session, ctx.author.id, "use")
+            await self._announce_achievements(ctx, new)
+
+    @commands.hybrid_command(name="eat", description="Eat a consumable food item")
+    @app_commands.describe(item_id="The item ID to eat")
+    async def eat(self, ctx: commands.Context, item_id: str):
+        """Eat a consumable food item (items with a ``consumed_message``)."""
+        async with self.bot.get_session() as session:
+            item = await ItemService.get(session, item_id.lower())
+            if item is None:
+                return await ctx.send(f"Unknown item `{item_id}`.")
+            if not item.consumable:
+                return await ctx.send(f"**{item.name}** isn't something you can eat.")
+            if not item.consumed_message:
+                return await ctx.send(
+                    f"**{item.name}** isn't edible — try `!use {item.id}` instead."
+                )
+            ok, msg, amount = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
+            if not ok:
+                return await ctx.send(msg)
+            msg = self._render_message(
+                item.consumed_message, item=item, amount=amount, user=ctx.author
+            ) or msg
             embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
@@ -492,11 +631,15 @@ class Shop(commands.Cog):
         return None
 
     @commands.command(name="trade", aliases=["exchange"])
-    async def trade(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
+    async def trade(
+        self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1, price: int = 0
+    ):
         """Trade items with another user.
 
         You offer an item; the other user replies with their own
-        `!trade @you <item> <qty>` to complete the exchange.
+        `!trade @you <item> <qty>` to complete the exchange. Add a custom
+        `price` (coins per item, e.g. `!trade @you rose 1 5`) to sell the
+        item for coins instead — the other user presses **Accept** to pay.
         """
         if user == ctx.author:
             return await ctx.send("You can't trade with yourself.")
@@ -504,6 +647,8 @@ class Shop(commands.Cog):
             return await ctx.send("You can't trade with bots.")
         if qty <= 0:
             return await ctx.send("Quantity must be positive.")
+        if price < 0:
+            return await ctx.send("Price can't be negative.")
 
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
@@ -518,6 +663,11 @@ class Shop(commands.Cog):
             # Complete a pending trade from the partner?
             pending = self._pending_offer(user.id, ctx.author.id)
             if pending:
+                if pending.price:
+                    return await ctx.send(
+                        "That offer is a coin trade — press **Accept** on it to pay "
+                        "and receive the item."
+                    )
                 partner_item = await ItemService.get(session, pending.item_id)
                 if partner_item is None:
                     self.trades.remove(pending)
@@ -561,12 +711,23 @@ class Shop(commands.Cog):
                 return await ctx.send(embed=embed)
 
             # Register a new offer with interactive buttons
-            offer = TradeOffer(ctx.author.id, user.id, item.id, qty)
+            offer = TradeOffer(ctx.author.id, user.id, item.id, qty, price=price or None)
             self.trades.append(offer)
-            embed = EmbedBuilder.info_embed(
-                "Trade Offer",
-                f"**{ctx.author.display_name}** offers **{item.name}** x{qty} to {user.mention}.",
-            )
+            if price:
+                total = price * qty
+                embed = EmbedBuilder.info_embed(
+                    "Trade Offer",
+                    f"**{ctx.author.display_name}** offers **{item.name}** x{qty} for "
+                    f"{format_coins(total)} to {user.mention}.\n"
+                    f"{user.mention}, press **Accept** to pay and receive the item.",
+                )
+            else:
+                embed = EmbedBuilder.info_embed(
+                    "Trade Offer",
+                    f"**{ctx.author.display_name}** offers **{item.name}** x{qty} to "
+                    f"{user.mention}.\n"
+                    f"Reply with `!trade @{ctx.author.display_name} <item> <qty>` to swap items.",
+                )
             embed.set_footer(text="Offer expires in 60 seconds")
             view = TradeOfferView(self, offer)
             message = await ctx.send(embed=embed, view=view)
@@ -574,6 +735,22 @@ class Shop(commands.Cog):
             offer.view = view
 
     # --------------------------------------------------------------- helpers
+
+    @staticmethod
+    def _render_message(template: str, *, item: Item, amount, user) -> Optional[str]:
+        """Render a per-item message template with the usual placeholders.
+
+        ``{amount}`` is only passed when the item's effect actually granted
+        coins, so templates without ``{amount}`` are untouched and templates
+        with it don't render a literal ``None``.
+        """
+        values = {
+            "item": item.name,
+            "user": getattr(user, "display_name", None) or str(user),
+        }
+        if amount is not None:
+            values["amount"] = format_coins(amount)
+        return render_item_message(template, **values)
 
     @staticmethod
     async def _announce_achievements(ctx: commands.Context, new_achievements: List[dict]) -> None:

@@ -591,7 +591,7 @@ class Casino(commands.Cog):
         if bet < self.config.min_bet:
             return False, f"Minimum bet is {self.config.min_bet:,} 💎️!"
 
-        if bet > self.config.max_bet:
+        if self.config.max_bet and bet > self.config.max_bet:
             return False, f"Maximum bet is {self.config.max_bet:,} 💎️!"
 
         wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
