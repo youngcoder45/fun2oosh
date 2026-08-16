@@ -488,6 +488,9 @@ class Shop(commands.Cog):
             embed = EmbedBuilder.success_embed("Sold!", description)
             await ctx.send(embed=embed)
 
+            new = await AchievementService.check(session, ctx.author.id, "sell")
+            await self._announce_achievements(ctx, new)
+
     # ---------------------------------------------------------------- usage
 
     @commands.hybrid_command(name="use", description="Use a consumable item")
@@ -517,7 +520,11 @@ class Shop(commands.Cog):
     @commands.hybrid_command(name="eat", description="Eat a consumable food item")
     @app_commands.describe(item_id="The item ID to eat")
     async def eat(self, ctx: commands.Context, item_id: str):
-        """Eat a consumable food item (items with a ``consumed_message``)."""
+        """Eat a consumable food item (items with a ``consumed_message``).
+
+        Eating consumes the item for flavor only — it never pays the item's
+        coin effect (use `!use` for that).
+        """
         async with self.bot.get_session() as session:
             item = await ItemService.get(session, item_id.lower())
             if item is None:
@@ -528,7 +535,9 @@ class Shop(commands.Cog):
                 return await ctx.send(
                     f"**{item.name}** isn't edible — try `!use {item.id}` instead."
                 )
-            ok, msg, amount = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
+            ok, msg, amount = await ItemService.use_item(
+                session, ctx.author.id, item, ctx=ctx, grant_money=False
+            )
             if not ok:
                 return await ctx.send(msg)
             msg = self._render_message(

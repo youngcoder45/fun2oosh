@@ -79,6 +79,166 @@ ACHIEVEMENTS: Dict[str, dict] = {
         "name": "Ascended",
         "desc": "Prestige for the first time",
     },
+    "workaholic": {
+        "name": "Workaholic",
+        "desc": "Work 10 times",
+    },
+    "career_worker": {
+        "name": "Career Worker",
+        "desc": "Work 50 times",
+    },
+    "beggar": {
+        "name": "Broke Beggar",
+        "desc": "Beg for the first time",
+    },
+    "panhandler": {
+        "name": "Panhandler",
+        "desc": "Beg 25 times",
+    },
+    "hustler": {
+        "name": "Hustler",
+        "desc": "Earn 50,000 💎️ in total",
+    },
+    "hunter": {
+        "name": "Hunter",
+        "desc": "Hunt for the first time",
+    },
+    "big_game_hunter": {
+        "name": "Big Game Hunter",
+        "desc": "Hunt 25 times",
+    },
+    "angler": {
+        "name": "Angler",
+        "desc": "Fish for the first time",
+    },
+    "master_angler": {
+        "name": "Master Angler",
+        "desc": "Fish 25 times",
+    },
+    "miner": {
+        "name": "Miner",
+        "desc": "Mine for the first time",
+    },
+    "gold_digger": {
+        "name": "Gold Digger",
+        "desc": "Mine 25 times",
+    },
+    "outdoorsman": {
+        "name": "Outdoorsman",
+        "desc": "Hunt, fish, and mine at least once",
+    },
+    "getaway_driver": {
+        "name": "Getaway Driver",
+        "desc": "Rob 25 times",
+    },
+    "legendary_thief": {
+        "name": "Legendary Thief",
+        "desc": "Rob 50 times",
+    },
+    "crime_boss": {
+        "name": "Crime Boss",
+        "desc": "Commit 25 crimes",
+    },
+    "kingpin": {
+        "name": "Kingpin",
+        "desc": "Commit 100 crimes",
+    },
+    "archaeologist": {
+        "name": "Archaeologist",
+        "desc": "Search 25 times",
+    },
+    "scavenger": {
+        "name": "Scavenger",
+        "desc": "Search 100 times",
+    },
+    "all_in": {
+        "name": "All In",
+        "desc": "Gamble 50,000 💎️ in one bet",
+    },
+    "whale": {
+        "name": "Whale",
+        "desc": "Gamble 250,000 💎️ in one bet",
+    },
+    "degenerate": {
+        "name": "Degenerate",
+        "desc": "Gamble 100 times",
+    },
+    "hoarder": {
+        "name": "Hoarder",
+        "desc": "Own 20 different items",
+    },
+    "pack_rat": {
+        "name": "Pack Rat",
+        "desc": "Own 50 different items",
+    },
+    "item_connoisseur": {
+        "name": "Item Connoisseur",
+        "desc": "Use 25 items",
+    },
+    "crate_enthusiast": {
+        "name": "Crate Enthusiast",
+        "desc": "Open 5 crates",
+    },
+    "crate_addict": {
+        "name": "Crate Addict",
+        "desc": "Open 25 crates",
+    },
+    "merchant": {
+        "name": "Merchant",
+        "desc": "Sell 10 items",
+    },
+    "tycoon": {
+        "name": "Tycoon",
+        "desc": "Sell 100 items",
+    },
+    "philanthropist": {
+        "name": "Philanthropist",
+        "desc": "Give 5 gifts",
+    },
+    "popular": {
+        "name": "Popular",
+        "desc": "Receive 5 gifts",
+    },
+    "trader": {
+        "name": "Trader",
+        "desc": "Complete 5 coin trades",
+    },
+    "provider": {
+        "name": "Provider",
+        "desc": "Collect role income 10 times",
+    },
+    "saver": {
+        "name": "Saver",
+        "desc": "Deposit 100,000 💎️ in total",
+    },
+    "banker": {
+        "name": "Banker",
+        "desc": "Hold 1,000,000 💎️ in the bank",
+    },
+    "streak_14": {
+        "name": "Consistent",
+        "desc": "Reach a 14-day daily streak",
+    },
+    "streak_30": {
+        "name": "Marathon",
+        "desc": "Reach a 30-day daily streak",
+    },
+    "tycoon_10m": {
+        "name": "Ten Million Club",
+        "desc": "Reach 10,000,000 net worth",
+    },
+    "billionaire": {
+        "name": "Billionaire",
+        "desc": "Reach 100,000,000 net worth",
+    },
+    "prestige_5": {
+        "name": "Five Times Ascended",
+        "desc": "Prestige 5 times",
+    },
+    "prestige_10": {
+        "name": "Enlightened",
+        "desc": "Prestige 10 times",
+    },
 }
 
 
@@ -86,32 +246,127 @@ ACHIEVEMENTS: Dict[str, dict] = {
 # The `event` is the triggering action ('work', 'crime', 'rob', 'gamble',
 # 'search', 'buy', 'daily', 'prestige', 'crate', 'use').
 def _condition_met(achievement_id: str, event: str, stats: dict) -> bool:
+    # --- first-time unlocks (gated on their own event) ---
     if achievement_id == "first_steps":
         return event == "work" and stats.get("work_count", 0) >= 1
     if achievement_id == "criminal":
         return event == "crime" and stats.get("crime_count", 0) >= 1
-    if achievement_id == "master_thief":
-        return stats.get("rob_count", 0) >= 10
     if achievement_id == "gambler":
         return event == "gamble" and stats.get("gamble_count", 0) >= 1
-    if achievement_id == "high_roller":
-        return stats.get("max_gamble", 0) >= 10000
     if achievement_id == "shopaholic":
         return event == "buy" and stats.get("buy_count", 0) >= 1
-    if achievement_id == "collector":
-        return stats.get("distinct_items", 0) >= 5
+    if achievement_id == "hunter":
+        return event == "hunt" and stats.get("hunt_count", 0) >= 1
+    if achievement_id == "angler":
+        return event == "fish" and stats.get("fish_count", 0) >= 1
+    if achievement_id == "miner":
+        return event == "mine" and stats.get("mine_count", 0) >= 1
+    if achievement_id == "beggar":
+        return event == "beg" and stats.get("beg_count", 0) >= 1
+    if achievement_id == "prestige_1":
+        return event == "prestige" and stats.get("prestige", 0) >= 1
+    # --- work / beg ---
+    if achievement_id == "master_thief":
+        return stats.get("rob_count", 0) >= 10
+    if achievement_id == "workaholic":
+        return stats.get("work_count", 0) >= 10
+    if achievement_id == "career_worker":
+        return stats.get("work_count", 0) >= 50
+    if achievement_id == "panhandler":
+        return stats.get("beg_count", 0) >= 25
+    if achievement_id == "hustler":
+        return stats.get("total_earned", 0) >= 50_000
+    # --- activities ---
+    if achievement_id == "big_game_hunter":
+        return stats.get("hunt_count", 0) >= 25
+    if achievement_id == "master_angler":
+        return stats.get("fish_count", 0) >= 25
+    if achievement_id == "gold_digger":
+        return stats.get("mine_count", 0) >= 25
+    if achievement_id == "outdoorsman":
+        return (
+            stats.get("hunt_count", 0) >= 1
+            and stats.get("fish_count", 0) >= 1
+            and stats.get("mine_count", 0) >= 1
+        )
+    # --- crime / rob ---
+    if achievement_id == "getaway_driver":
+        return stats.get("rob_count", 0) >= 25
+    if achievement_id == "legendary_thief":
+        return stats.get("rob_count", 0) >= 50
+    if achievement_id == "crime_boss":
+        return stats.get("crime_count", 0) >= 25
+    if achievement_id == "kingpin":
+        return stats.get("crime_count", 0) >= 100
+    # --- search ---
     if achievement_id == "explorer":
         return stats.get("search_count", 0) >= 5
+    if achievement_id == "archaeologist":
+        return stats.get("search_count", 0) >= 25
+    if achievement_id == "scavenger":
+        return stats.get("search_count", 0) >= 100
+    # --- gambling ---
+    if achievement_id == "high_roller":
+        return stats.get("max_gamble", 0) >= 10000
+    if achievement_id == "all_in":
+        return stats.get("max_gamble", 0) >= 50_000
+    if achievement_id == "whale":
+        return stats.get("max_gamble", 0) >= 250_000
+    if achievement_id == "degenerate":
+        return stats.get("gamble_count", 0) >= 100
+    # --- items / shop ---
+    if achievement_id == "collector":
+        return stats.get("distinct_items", 0) >= 5
+    if achievement_id == "hoarder":
+        return stats.get("distinct_items", 0) >= 20
+    if achievement_id == "pack_rat":
+        return stats.get("distinct_items", 0) >= 50
+    if achievement_id == "item_connoisseur":
+        return stats.get("item_count", 0) >= 25
+    if achievement_id == "crate_enthusiast":
+        return stats.get("crate_count", 0) >= 5
+    if achievement_id == "crate_addict":
+        return stats.get("crate_count", 0) >= 25
+    if achievement_id == "merchant":
+        return stats.get("sell_count", 0) >= 10
+    if achievement_id == "tycoon":
+        return stats.get("sell_count", 0) >= 100
+    # --- social ---
+    if achievement_id == "philanthropist":
+        return stats.get("gifts_given", 0) >= 5
+    if achievement_id == "popular":
+        return stats.get("gifts_received", 0) >= 5
+    if achievement_id == "trader":
+        return stats.get("trade_count", 0) >= 5
+    if achievement_id == "provider":
+        return stats.get("collect_count", 0) >= 10
+    # --- banking ---
+    if achievement_id == "saver":
+        return stats.get("deposited_total", 0) >= 100_000
+    if achievement_id == "banker":
+        return stats.get("bank", 0) >= 1_000_000
+    # --- streaks ---
     if achievement_id == "streak_3":
         return stats.get("streak", 0) >= 3
     if achievement_id == "streak_7":
         return stats.get("streak", 0) >= 7
+    if achievement_id == "streak_14":
+        return stats.get("streak", 0) >= 14
+    if achievement_id == "streak_30":
+        return stats.get("streak", 0) >= 30
+    # --- net worth / prestige ---
     if achievement_id == "rich":
         return stats.get("networth", 0) >= 100_000
     if achievement_id == "millionaire":
         return stats.get("networth", 0) >= 1_000_000
-    if achievement_id == "prestige_1":
-        return event == "prestige" and stats.get("prestige", 0) >= 1
+    if achievement_id == "tycoon_10m":
+        return stats.get("networth", 0) >= 10_000_000
+    if achievement_id == "billionaire":
+        return stats.get("networth", 0) >= 100_000_000
+    if achievement_id == "prestige_5":
+        return stats.get("prestige", 0) >= 5
+    if achievement_id == "prestige_10":
+        return stats.get("prestige", 0) >= 10
     return False
 
 
@@ -171,6 +426,13 @@ class AchievementService:
             "buy",
             "crate",
             "item",
+            "hunt",
+            "fish",
+            "mine",
+            "beg",
+            "collect",
+            "sell",
+            "trade",
         ):
             counts[f"{tx_type}_count"] = (
                 await session.execute(
@@ -188,12 +450,53 @@ class AchievementService:
             )
         ).scalar() or 0
 
+        # Gifts sent (negative) vs received (positive)
+        gifts_given = (
+            await session.execute(
+                select(func.count(Transaction.id)).where(
+                    Transaction.user_id == user_id,
+                    Transaction.type == "gift",
+                    Transaction.amount < 0,
+                )
+            )
+        ).scalar() or 0
+        gifts_received = (
+            await session.execute(
+                select(func.count(Transaction.id)).where(
+                    Transaction.user_id == user_id,
+                    Transaction.type == "gift",
+                    Transaction.amount > 0,
+                )
+            )
+        ).scalar() or 0
+
+        deposited_total = (
+            await session.execute(
+                select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+                    Transaction.user_id == user_id, Transaction.type == "deposit"
+                )
+            )
+        ).scalar() or 0
+
+        total_earned = (
+            await session.execute(
+                select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+                    Transaction.user_id == user_id, Transaction.amount > 0
+                )
+            )
+        ).scalar() or 0
+
         return {
             **counts,
             "max_gamble": max_gamble,
+            "gifts_given": gifts_given,
+            "gifts_received": gifts_received,
+            "deposited_total": deposited_total,
+            "total_earned": total_earned,
             "streak": wallet.daily_streak or 0,
             "prestige": wallet.prestige or 0,
             "distinct_items": await ItemService.distinct_item_count(session, user_id),
+            "bank": wallet.bank or 0,
             "networth": (wallet.balance or 0)
             + (wallet.bank or 0)
             + await ItemService.inventory_value(session, user_id),

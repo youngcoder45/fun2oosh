@@ -544,10 +544,8 @@ class Admin(commands.Cog):
             )
         lines = []
         for row in rows:
-            role = ctx.guild.get_role(row.role_id)
-            label = role.name if role is not None else f"Role {row.role_id}"
             lines.append(
-                f"**{label}** - {format_coins(row.amount)} "
+                f"<@&{row.role_id}> - {format_coins(row.amount)} "
                 f"every {format_duration(row.claim_interval or 3600)}"
             )
         embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))
@@ -681,10 +679,8 @@ class Admin(commands.Cog):
             )
         lines = []
         for row in rows:
-            role = interaction.guild.get_role(row.role_id)
-            label = role.name if role is not None else f"Role {row.role_id}"
             lines.append(
-                f"**{label}** - {format_coins(row.amount)} "
+                f"<@&{row.role_id}> - {format_coins(row.amount)} "
                 f"every {format_duration(row.claim_interval or 3600)}"
             )
         embed = EmbedBuilder.info_embed("Role Income", "\n".join(lines))

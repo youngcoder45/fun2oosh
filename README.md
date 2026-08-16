@@ -21,7 +21,7 @@ Documentation:
 - `!gamble` — quick coinflip-style bet
 - `!leaderboard` / `!richest` / `!networth` / `!profile` / `!prestige` — stats & progression
 - `!rep <user>` — give reputation (12h cooldown)
-- `!achievements` / `!badges` — 13 unlockable achievements
+- `!achievements` / `!badges` — 53 unlockable achievements (paginated with buttons)
 - `!transactions` / `!history` — paginated transaction log
 
 ### Shop & Inventory (`cogs/shop.py`)
@@ -115,7 +115,9 @@ There are two layers of configuration:
 | `activities.rob` | success rate, robbery %, cap, cooldown, **fine rate on failure** |
 | `activities.search` | success rate, cooldown, searchable locations |
 | `activities.beg` | success rate, reward range, cooldown |
-| `activities.work` | min/max random reward for `!work` (default 100–2000; a per-guild `!econfig work_reward` still pins a fixed value) |
+| `activities.work` | min/max random reward (default 100–2000) and `cooldown_seconds` for `!work` / `/work` (a per-guild `!econfig work_reward` still pins a fixed value) |
+| `activities.gamble` | `cooldown_seconds` for `!gamble` |
+| `activities.rep` | `cooldown_seconds` for `!rep` |
 | `shop.items` | the full item catalog — id, name, description, price, sell price, category, rarity, `stackable`, **`giveable`**, `consumable`, custom **`bought_message` / `used_message` / `consumed_message` / `gave_message` / `sold_message`**, and `effects` (use actions: random money like a gift card, role grants, boosters, crates, tool multipliers) |
 
 Every message field is **per item** and accepts **one string or an array of
@@ -134,7 +136,8 @@ so one item can carry a different message set for every command:
 Message placeholders: `{item}`, `{qty}`, `{amount}` (formatted coins),
 `{user}`, `{sender}`, and `{user_mention}` / `{sender_mention}` for
 `gave_message`. `{amount}` is only filled when the action actually granted
-coins, so you can write "+**{amount}**" in eat messages for food items.
+coins — `!eat` pays nothing (it's flavor only), so `consumed_message`
+templates should not use `{amount}`.
 
 ```jsonc
 "bought_message": [
@@ -155,12 +158,14 @@ coins, so you can write "+**{amount}**" in eat messages for food items.
 ```
 
 A food-style consumable (like Cookie or Cake) also sets `consumed_message`
-so `!eat` shows eating flavor instead of `!use`'s message:
+so `!eat` shows eating flavor instead of `!use`'s message. Eating **never
+pays coins** — the item is consumed for flavor only; use `!use` to get the
+item's coin effect:
 
 ```jsonc
 "consumed_message": [
-  "You ate a {item} and it's very tasty! +**{amount}** 🍪",
-  "You dunked your {item} in milk and found **{amount}**! 🍪"
+  "You ate a {item} and it's very tasty! 🍪",
+  "You dunked your {item} in milk. Perfect. 🍪"
 ]
 ```
 

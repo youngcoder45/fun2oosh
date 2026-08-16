@@ -71,7 +71,14 @@
     },
     "work": {
       "min_reward": 100,
-      "max_reward": 2000
+      "max_reward": 2000,
+      "cooldown_seconds": 1800
+    },
+    "gamble": {
+      "cooldown_seconds": 30
+    },
+    "rep": {
+      "cooldown_seconds": 43200
     }
   },
   "shop": {
@@ -144,10 +151,10 @@
         "limited": false,
         "max_stack": 99,
         "consumed_message": [
-          "You unwrapped **{item}** and ate it. Sweet! +**{amount}** 🍭",
-          "You ate **{item}** and it tasted like childhood. +**{amount}** 🍭",
-          "You licked **{item}** happily. Delicious — and worth **{amount}**! 🍭",
-          "You finished **{item}** in record time. +**{amount}** 🍭"
+          "You unwrapped **{item}** and ate it. Sweet! 🍭",
+          "You ate **{item}** and it tasted like childhood. 🍭",
+          "You licked **{item}** happily. Delicious! 🍭",
+          "You finished **{item}** in record time. 🍭"
         ],
         "gave_message": [
           "{sender} gave {user} a **{item}** as a sweet treat. 🍭",
@@ -180,10 +187,10 @@
         "limited": false,
         "max_stack": 99,
         "consumed_message": [
-          "You sipped **{item}** and felt alive. +**{amount}** ☕",
-          "You drank **{item}** — extra energy, extra coins (**{amount}**) ☕",
-          "You enjoyed a warm cup of **{item}** and found **{amount}**! ☕",
-          "You gulped **{item}** and got a caffeine boost worth **{amount}**! ☕"
+          "You sipped **{item}** and felt alive. ☕",
+          "You drank **{item}** — extra energy! ☕",
+          "You enjoyed a warm cup of **{item}**. ☕",
+          "You gulped **{item}** and got a caffeine boost! ☕"
         ],
         "gave_message": [
           "{sender} handed {user} a **{item}** to wake them up. ☕",
@@ -216,10 +223,10 @@
         "limited": false,
         "max_stack": 99,
         "consumed_message": [
-          "You ate **{item}** — extra cheesy! +**{amount}** 🍕",
-          "You devoured a slice of **{item}** and found **{amount}**! 🍕",
-          "You munched on **{item}**. Tasty and profitable: **{amount}**! 🍕",
-          "You ate **{item}** and it was delicious. You got **{amount}**! 🍕"
+          "You ate **{item}** — extra cheesy! 🍕",
+          "You devoured a slice of **{item}**. 🍕",
+          "You munched on **{item}**. Tasty! 🍕",
+          "You ate **{item}** and it was delicious. 🍕"
         ],
         "gave_message": [
           "{sender} shared a **{item}** with {user}. 🍕",
@@ -252,10 +259,10 @@
         "limited": false,
         "max_stack": 99,
         "consumed_message": [
-          "You chugged **{item}** and got an instant boost worth **{amount}**! ⚡",
-          "You downed **{item}** — heart racing, wallet growing: **{amount}**! ⚡",
-          "You drank **{item}** and felt unstoppable. +**{amount}** ⚡",
-          "You cracked open **{item}** and gained **{amount}** energy coins! ⚡"
+          "You chugged **{item}** and got an instant boost! ⚡",
+          "You downed **{item}** — heart racing! ⚡",
+          "You drank **{item}** and felt unstoppable. ⚡",
+          "You cracked open **{item}** and gained pure energy! ⚡"
         ],
         "gave_message": [
           "{sender} gave {user} an **{item}** for the grind. ⚡",
@@ -336,10 +343,10 @@
           "You bought a **{item}** — treat yourself! 🍪"
         ],
         "consumed_message": [
-          "You ate a **{item}** and it's very tasty! +**{amount}** 🍪",
-          "You dunked your **{item}** in milk and found **{amount}**! 🍪",
-          "You devoured **{item}** in one bite. Delicious! +**{amount}** 🍪",
-          "You ate a warm **{item}** and felt happiness worth **{amount}**. 🍪"
+          "You ate a **{item}** and it's very tasty! 🍪",
+          "You dunked your **{item}** in milk. Perfect. 🍪",
+          "You devoured **{item}** in one bite. Delicious! 🍪",
+          "You ate a warm **{item}** and felt happiness. 🍪"
         ],
         "gave_message": [
           "{sender} gave {user} a **{item}** — fresh from the oven! 🍪",
@@ -378,10 +385,10 @@
           "You bought **{item}**. Who's it for? 🎂"
         ],
         "consumed_message": [
-          "You ate a slice of **{item}** and it was heavenly! +**{amount}** 🎂",
-          "You devoured **{item}**. Worth every crumb: **{amount}**! 🎂",
-          "You enjoyed **{item}** with a cup of tea. Found **{amount}**! 🎂",
-          "You ate **{item}** and felt like royalty. +**{amount}** 🎂"
+          "You ate a slice of **{item}** and it was heavenly! 🎂",
+          "You devoured **{item}**. Worth every crumb! 🎂",
+          "You enjoyed **{item}** with a cup of tea. 🎂",
+          "You ate **{item}** and felt like royalty. 🎂"
         ],
         "gave_message": [
           "{sender} gave {user} a slice of **{item}**. Celebration time! 🎂",

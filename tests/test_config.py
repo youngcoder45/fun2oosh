@@ -147,7 +147,7 @@ async def main() -> None:
             if m
         }
         assert consumed_rendered and consumed_rendered <= expected_consumed, consumed_rendered
-        assert all("Lollipop" in m and "30 💎️" in m for m in consumed_rendered)
+        assert all("Lollipop" in m for m in consumed_rendered)
         sold_rendered = {
             m
             for m in (

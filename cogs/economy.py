@@ -21,7 +21,7 @@ from services.progression import ACHIEVEMENTS, AchievementService, ProgressionSe
 from services.role_income import RoleIncomeService
 from utils.anti_fraud import anti_fraud
 from utils.config import Config
-from utils.cooldowns import check_cooldown
+from utils.cooldowns import check_cooldown, cooldown_manager, cooldown_notice
 from utils.economy_utils import EconomyUtils
 from utils.helpers import (
     COLOR_ERROR,
@@ -133,7 +133,7 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @commands.command(name="work")
-    @check_cooldown("work", 1800)  # 30 minutes
+    @check_cooldown("work", lambda: int(activity_config("work").get("cooldown_seconds", 1800)))
     async def work(self, ctx: commands.Context):
         """Work to earn some coins (random reward)."""
         reward = await self._resolve_work_reward(ctx.guild)
@@ -156,9 +156,17 @@ class Economy(commands.Cog):
         await self._announce_achievements(ctx, new)
 
     @app_commands.command(name="work", description="Work to earn coins")
-    @app_commands.checks.cooldown(1, 1800, key=lambda i: (i.guild_id, i.user.id))
     async def work_slash(self, interaction: discord.Interaction):
         """Slash command for work."""
+        duration = int(activity_config("work").get("cooldown_seconds", 1800))
+        if cooldown_manager.is_on_cooldown("work", interaction.user.id, duration):
+            remaining = cooldown_manager.get_remaining_time(
+                "work", interaction.user.id, duration
+            )
+            return await interaction.response.send_message(
+                cooldown_notice("work", remaining), ephemeral=True
+            )
+        cooldown_manager.set_cooldown("work", interaction.user.id)
         reward = await self._resolve_work_reward(interaction.guild)
 
         async with self.bot.get_session() as session:
@@ -233,6 +241,10 @@ class Economy(commands.Cog):
         embed = self._collect_embed(breakdown, ctx.author)
         await ctx.send(embed=embed)
 
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, "collect")
+        await self._announce_achievements(ctx, new)
+
     @app_commands.command(name="collect", description="Claim your role income")
     async def collect_slash(self, interaction: discord.Interaction):
         """Slash command for collect."""
@@ -269,6 +281,10 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=embed, ephemeral=True)
         embed = self._collect_embed(breakdown, interaction.user)
         await interaction.response.send_message(embed=embed)
+
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, interaction.user.id, "collect")
+        await self._announce_achievements(ctx=interaction, new=new)
 
     @commands.command(name="daily", aliases=["d"])
     async def daily(self, ctx: commands.Context):
@@ -698,6 +714,10 @@ class Economy(commands.Cog):
             )
             await ctx.send(embed=embed)
 
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, "beg")
+        await self._announce_achievements(ctx, new)
+
     @commands.command(name="crime", aliases=["c"])
     @check_cooldown("crime", lambda: int(activity_config("crime").get("cooldown_seconds", 300)))
     async def crime(self, ctx: commands.Context):
@@ -873,7 +893,7 @@ class Economy(commands.Cog):
         await self._announce_achievements(ctx, new)
 
     @commands.command(name="gamble", aliases=["bet"])
-    @check_cooldown("gamble", 30)  # 30 seconds
+    @check_cooldown("gamble", lambda: int(activity_config("gamble").get("cooldown_seconds", 30)))
     async def gamble(self, ctx: commands.Context, amount: int):
         """Gamble your coins! 45% chance to double, 55% chance to lose all."""
         import random
@@ -1013,6 +1033,14 @@ class Economy(commands.Cog):
 
             # Transfer
             sender_wallet.balance -= amount
+            session.add(
+                Transaction(
+                    user_id=ctx.author.id,
+                    type="gift",
+                    amount=-amount,
+                    description=f"Gift to {user.display_name}",
+                )
+            )
             await EconomyUtils.add_money(
                 session, user.id, amount, "gift", f"Gift from {ctx.author.display_name}"
             )
@@ -1022,6 +1050,10 @@ class Economy(commands.Cog):
             "Gift Sent!", f"You gave {format_coins(amount)} to {user.mention}!"
         )
         await ctx.send(embed=embed)
+
+        async with self.bot.get_session() as session:
+            new = await AchievementService.check(session, ctx.author.id, "gift")
+        await self._announce_achievements(ctx, new)
 
     @commands.command(name="search", aliases=["scavenge"])
     @check_cooldown("search", lambda: int(activity_config("search").get("cooldown_seconds", 45)))

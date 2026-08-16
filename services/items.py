@@ -281,6 +281,7 @@ class ItemService:
         user_id: int,
         item: Item,
         ctx=None,
+        grant_money: bool = True,
     ) -> Tuple[bool, str, Optional[int]]:
         """Consume one unit of a consumable item and apply its effects.
 
@@ -290,7 +291,9 @@ class ItemService:
         when the effect didn't grant coins, e.g. boosters/crates) so the
         command layer can fill the ``{amount}`` placeholder in custom
         messages. Runs entirely under the user lock; the item is only
-        consumed after every effect succeeded.
+        consumed after every effect succeeded. ``grant_money`` lets a caller
+        consume an item without paying its money effect (``!eat`` consumes
+        food with no coins).
         """
         if not item.consumable:
             return False, "That item can't be used.", None
@@ -310,10 +313,15 @@ class ItemService:
             # --- apply effects -------------------------------------------
             money_amount: Optional[int] = None
             if "money_min" in effects:
-                amount = random.randint(effects["money_min"], effects["money_max"])
-                money_amount = amount
-                await EconomyUtils.add_money(session, user_id, amount, "item", f"Used {item.name}")
-                msg = f"You used **{item.name}** and got **{amount:,} 💎️**!"
+                if grant_money:
+                    amount = random.randint(effects["money_min"], effects["money_max"])
+                    money_amount = amount
+                    await EconomyUtils.add_money(
+                        session, user_id, amount, "item", f"Used {item.name}"
+                    )
+                    msg = f"You used **{item.name}** and got **{amount:,} 💎️**!"
+                else:
+                    msg = f"You ate **{item.name}**."
 
             elif "role" in effects:
                 role_ok, msg = await ItemService._apply_role_effect(

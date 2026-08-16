@@ -31,6 +31,7 @@ from utils.helpers import (
     event_names,
     format_coins,
 )
+from utils.pagination import PaginationView
 from utils.runtime_config import activity as activity_config
 
 EMOJI_UNLOCK = "<:unlock:1538264274353393674>"
@@ -226,7 +227,7 @@ class Activities(commands.Cog):
     # ------------------------------------------------------------ reputation
 
     @commands.command(name="rep", aliases=["reputation"])
-    @check_cooldown("rep", 43200)  # 12 hours per giver
+    @check_cooldown("rep", lambda: int(activity_config("rep").get("cooldown_seconds", 43200)))
     async def rep(self, ctx: commands.Context, user: discord.User):
         """Give reputation to a user (12h cooldown)."""
         if ctx.guild is None:
@@ -251,24 +252,34 @@ class Activities(commands.Cog):
 
     @commands.command(name="achievements", aliases=["ach", "badges"])
     async def achievements(self, ctx: commands.Context, user: Optional[discord.User] = None):
-        """View your unlocked achievements."""
+        """View your unlocked achievements (paginated with buttons)."""
         target = user or ctx.author
         async with self.bot.get_session() as session:
             unlocked = set(await AchievementService.unlocked_ids(session, target.id))
 
-        embed = discord.Embed(
-            title=f"{target.display_name}'s Achievements",
-            description=f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked",
-            color=discord.Color.default(),
-        )
-        for aid, meta in ACHIEVEMENTS.items():
-            done = aid in unlocked
-            embed.add_field(
-                name=f"{EMOJI_UNLOCK if done else EMOJI_LOCK} {meta['name']}",
-                value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
-                inline=False,
+        items = list(ACHIEVEMENTS.items())
+        pages = []
+        per_page = 8
+        for start in range(0, len(items), per_page):
+            embed = discord.Embed(
+                title=f"{target.display_name}'s Achievements",
+                description=f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked",
+                color=discord.Color.default(),
             )
-        await ctx.send(embed=embed)
+            for aid, meta in items[start : start + per_page]:
+                done = aid in unlocked
+                embed.add_field(
+                    name=f"{EMOJI_UNLOCK if done else EMOJI_LOCK} {meta['name']}",
+                    value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
+                    inline=False,
+                )
+            embed.set_footer(
+                text=f"Page {start // per_page + 1}/{(len(items) - 1) // per_page + 1}"
+            )
+            pages.append(embed)
+
+        view = PaginationView(pages, owner_id=ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
 
     # --------------------------------------------------------------- helpers
 
