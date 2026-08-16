@@ -546,10 +546,11 @@
           "You turned the rose into a tiny crown."
         ],
         "gave_message": [
-          "{sender} just gave {user} a rose.",
-          "{sender} handed {user} a beautiful rose.",
-          "A rose from {sender} to {user} — how romantic!",
-          "{sender} tossed {user} a rose."
+          "{sender} gave {user} a rose to show their love. 🌹",
+          "{sender} handed {user} a rose to make them blush. 🌹",
+          "{sender} gave {user} a rose because they love them. 🌹",
+          "{sender} gifted {user} a rose as a gift for being so cute. 🌹",
+          "{sender} slipped {user} a rose with a shy smile. 🌹"
         ],
         "sold_message": [
           "You sold **{item}** for **{amount}**. A little sad, but okay. 🌹",
