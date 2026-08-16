@@ -12,3 +12,4 @@ venv/
 # *.db
 .ruff-cache/
 *.db
+fun2oosh.db
