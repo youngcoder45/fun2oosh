@@ -32,7 +32,7 @@ class Item(Base):
         Boolean, default=True
     )  # can be gifted / traded to other users
     consumable: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Custom messages (config.json) — None falls back to the built-in text.
+    # Custom messages (config.json) None falls back to the built-in text.
     # Placeholders: {item}, {qty}, {amount}, {user}, {sender}.
     bought_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     used_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

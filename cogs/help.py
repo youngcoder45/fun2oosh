@@ -3,8 +3,8 @@ Help cog: categorized overview + per-command detail with gameplay guides.
 
 Replaces discord.py's default help command:
 
-- ``!help`` — lists every command grouped by category.
-- ``!help <command>`` — usage, aliases, description, and (for casino games) a
+- ``!help`` lists every command grouped by category.
+- ``!help <command>`` usage, aliases, description, and (for casino games) a
   step-by-step "How to play" guide, e.g. ``!help keno`` explains how to play.
 
 The prefix is resolved at runtime (``{prefix}`` placeholders in the guides),
@@ -42,14 +42,14 @@ GAME_GUIDES: Dict[str, str] = {
     ),
     "poker": (
         "**Goal:** make the best 5-card poker hand to beat the dealer.\n"
-        "**How:** Texas Hold'em vs the dealer — your 2 hole cards plus shared community "
+        "**How:** Texas Hold'em vs the dealer your 2 hole cards plus shared community "
         "cards form your hand. Standard rankings apply, royal flush down to high card.\n"
         "**Payout:** wins pay up to 2x your bet.\n"
         "**Usage:** `{prefix}poker <bet>`"
     ),
     "roulette": (
         "**Goal:** predict where the ball lands (0-36).\n"
-        "**How:** `{prefix}roulette <amount> <bet>` — bet on `red`, `black`, `odd`, `even`, "
+        "**How:** `{prefix}roulette <amount> <bet>` bet on `red`, `black`, `odd`, `even`, "
         "`low` (1-18), `high` (19-36), or a specific `number` (0-36). It's a **shared table**: "
         "the wheel spins 15s after the last bet (max 1 minute) and everyone in the channel "
         "can join the same round.\n"
@@ -58,79 +58,79 @@ GAME_GUIDES: Dict[str, str] = {
     ),
     "slots": (
         "**Goal:** line up matching symbols.\n"
-        "**How:** `{prefix}slots <bet>` — 3 reels spin; match 3 of the same symbol.\n"
-        "**Payouts:** three-of-a-kind by symbol — diamond 50x, seven 30x, star 20x, bell 15x, "
+        "**How:** `{prefix}slots <bet>` 3 reels spin; match 3 of the same symbol.\n"
+        "**Payouts:** three-of-a-kind by symbol diamond 50x, seven 30x, star 20x, bell 15x, "
         "grape 10x, orange 8x, lemon 5x, cherry 3x. Two matching reels pay 1/3 of that.\n"
         "**Usage:** `{prefix}slots 100`"
     ),
     "coinflip": (
         "**Goal:** call the coin.\n"
-        "**How:** `{prefix}coinflip <heads|tails> <bet>` — a fair 50/50 flip.\n"
+        "**How:** `{prefix}coinflip <heads|tails> <bet>` a fair 50/50 flip.\n"
         "**Payout:** win = 2x your bet.\n"
         "**Usage:** `{prefix}coinflip heads 100`"
     ),
     "dice": (
         "**Goal:** predict the total of two dice (2-12).\n"
-        "**How:** `{prefix}dice <prediction> <bet>` — predict `over` (8+), `under` (6-), "
+        "**How:** `{prefix}dice <prediction> <bet>` predict `over` (8+), `under` (6-), "
         "`seven`, or an exact `number` (2-12).\n"
         "**Payouts:** over/under 2x, seven 4x, exact number 10x.\n"
         "**Usage:** `{prefix}dice over 100`"
     ),
     "crash": (
         "**Goal:** cash out before the multiplier crashes.\n"
-        "**How:** `{prefix}crash <bet> <target>` — set a cash-out target between 1.1x and 100x. "
+        "**How:** `{prefix}crash <bet> <target>` set a cash-out target between 1.1x and 100x. "
         "The multiplier climbs until it crashes or your target is reached.\n"
         "**Payout:** bet x target if you cash out in time, otherwise you lose the bet.\n"
         "**Usage:** `{prefix}crash 100 2.5`"
     ),
     "russianroulette": (
         "**Goal:** survive the chamber.\n"
-        "**How:** `{prefix}russianroulette <bet>` — a 1-in-6 chance of losing.\n"
+        "**How:** `{prefix}russianroulette <bet>` a 1-in-6 chance of losing.\n"
         "**Payout:** survive = 5x your bet. High risk, high reward!\n"
         "**Usage:** `{prefix}russianroulette 100`"
     ),
     "war": (
         "**Goal:** beat the dealer's card.\n"
-        "**How:** `{prefix}war <bet>` — you and the dealer each draw a card; the higher card wins.\n"
+        "**How:** `{prefix}war <bet>` you and the dealer each draw a card; the higher card wins.\n"
         "**Payout:** win = 2x, tie = bet returned.\n"
         "**Usage:** `{prefix}war 100`"
     ),
     "baccarat": (
         "**Goal:** bet on the hand closest to 9.\n"
-        "**How:** `{prefix}baccarat <player|banker|tie> <amount>` — cards are summed and only "
+        "**How:** `{prefix}baccarat <player|banker|tie> <amount>` cards are summed and only "
         "the last digit counts; 10s and face cards count as 0. Third-card rules apply.\n"
         "**Payouts:** player 2x, banker 1.95x (5% commission), tie 8x.\n"
         "**Usage:** `{prefix}baccarat banker 100`"
     ),
     "hilo": (
         "**Goal:** predict the next card.\n"
-        "**How:** `{prefix}hilo <high|low> <bet>` — guess whether the next card is higher or "
+        "**How:** `{prefix}hilo <high|low> <bet>` guess whether the next card is higher or "
         "lower than the current one.\n"
         "**Payout:** win = 2x; a matching card returns your bet.\n"
         "**Usage:** `{prefix}hilo high 100`"
     ),
     "keno": (
         "**Goal:** match your numbers to the draw.\n"
-        "**How:** `{prefix}keno <5 numbers 1-80> <bet>` — pick exactly 5 unique numbers between "
+        "**How:** `{prefix}keno <5 numbers 1-80> <bet>` pick exactly 5 unique numbers between "
         "1 and 80; 20 numbers are then drawn.\n"
         "**Payouts:** 5 matches = 50x, 4 = 10x, 3 = 3x, 2 = 1x (bet back).\n"
         "**Usage:** `{prefix}keno 5 12 23 45 67 100`"
     ),
     "gamble": (
         "**Goal:** double up on a coin flip.\n"
-        "**How:** `{prefix}gamble <amount>` — 45% chance to double your money, 55% to lose it all.\n"
+        "**How:** `{prefix}gamble <amount>` 45% chance to double your money, 55% to lose it all.\n"
         "**Usage:** `{prefix}gamble 100`"
     ),
     "lottery": (
         "**Goal:** win the server jackpot.\n"
-        "**How:** `{prefix}lottery buy <n>` — each ticket costs the configurable price "
+        "**How:** `{prefix}lottery buy <n>` each ticket costs the configurable price "
         "(default 50 💎). A scheduled draw happens every `draw_interval_seconds` "
         "(default 24h) and one random ticket takes the whole pot.\n"
         "**Usage:** `{prefix}lottery` to see the pot, `{prefix}lottery buy 5` to buy 5 tickets"
     ),
     "casinoleaderboard": (
         "**Goal:** see the casino's biggest winners.\n"
-        "**How:** `{prefix}casinoleaderboard` — ranks users by lifetime casino wins "
+        "**How:** `{prefix}casinoleaderboard` ranks users by lifetime casino wins "
         "(biggest single win, total wins, and net across all games).\n"
         "**Usage:** `{prefix}casinoleaderboard`"
     ),
@@ -171,7 +171,7 @@ class HelpCog(commands.Cog):
         embed = discord.Embed(
             title="Fun2Oosh Help",
             description=(
-                f"Prefix: `{prefix}` — most commands also work as slash commands.\n"
+                f"Prefix: `{prefix}` most commands also work as slash commands.\n"
                 f"Type `{prefix}help <command>` for usage and how to play, "
                 f"e.g. `{prefix}help keno` or `{prefix}help blackjack`."
             ),
@@ -221,7 +221,7 @@ class HelpCog(commands.Cog):
         guide = GAME_GUIDES.get(command.name)
         if guide:
             embed.add_field(
-                name="🎲 How to Play",
+                name="How to Play",
                 value=guide.format(prefix=prefix),
                 inline=False,
             )

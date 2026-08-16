@@ -1,8 +1,8 @@
 """
 Lottery cog: per-guild jackpot.
 
-- ``!lottery`` — show the current pot, ticket price, and next draw.
-- ``!lottery buy <n>`` — buy tickets (price from ``data/config.json``).
+- ``!lottery`` show the current pot, ticket price, and next draw.
+- ``!lottery buy <n>`` buy tickets (price from ``data/config.json``).
 - A background task draws every ``draw_interval_seconds``; the winner takes
   the whole pot. The pot and tickets are persisted in the database, so they
   survive restarts. Wins are recorded as transactions and audited.
@@ -17,13 +17,13 @@ Config (``data/config.json`` -> ``lottery``):
       "max_tickets_per_user": null
     }
 
-- ``ticket_price`` — coins per ticket
-- ``draw_interval_seconds`` — seconds between draws (used unless pinned)
-- ``next_draw_at`` — optional ISO-8601 UTC time (e.g. ``2026-08-20T20:00:00Z``)
+- ``ticket_price`` coins per ticket
+- ``draw_interval_seconds`` seconds between draws (used unless pinned)
+- ``next_draw_at`` optional ISO-8601 UTC time (e.g. ``2026-08-20T20:00:00Z``)
   pinning the *next* draw to an exact moment; after it fires (or once it is
   in the past) the interval schedule applies again. Set to ``null`` to disable.
-- ``max_tickets_per_buy`` — max tickets per ``lottery buy`` call
-- ``max_tickets_per_user`` — optional cap on total tickets one user may hold
+- ``max_tickets_per_buy`` max tickets per ``lottery buy`` call
+- ``max_tickets_per_user`` optional cap on total tickets one user may hold
 """
 
 import asyncio
@@ -128,13 +128,13 @@ class LotteryCog(commands.Cog):
         price = LotteryCog._cfg("ticket_price", 50)
         interval = int(LotteryCog._cfg("draw_interval_seconds", 86400))
         embed = EmbedBuilder.info_embed(
-            "🎰 Server Lottery",
+            "Server Lottery",
             (
                 f"**Pot:** {format_coins(pot)}\n"
                 f"**Ticket:** {format_coins(price)} each\n"
                 f"**Tickets sold:** {tickets}\n"
                 f"**Next draw:** {f'<t:{draw_at}:R>' if draw_at else 'starts when someone buys a ticket'}"
-                f"\n\nBuy tickets with `{ctx.prefix}lottery buy <n>` — "
+                f"\n\nBuy tickets with `{ctx.prefix}lottery buy <n>` "
                 f"the winner takes the whole pot (draw every {interval // 3600}h)."
             ),
         )
@@ -256,7 +256,7 @@ class LotteryCog(commands.Cog):
         now = utcnow()
 
         if total_tickets == 0 or lottery.pot <= 0:
-            # No entries — roll the draw forward, the pot carries over.
+            # No entries roll the draw forward, the pot carries over.
             lottery.draw_at = LotteryCog._schedule(interval)
             await session.commit()
             return

@@ -197,7 +197,9 @@ class TradeOfferView(discord.ui.View):
         async with self.cog.bot.get_session() as session:
             item = await ItemService.get(session, offer.item_id)
             if item is None:
-                return await self._fail_priced(interaction, offer, "The offered item no longer exists.")
+                return await self._fail_priced(
+                    interaction, offer, "The offered item no longer exists."
+                )
             async with lock_manager.for_users(offer.initiator, offer.partner):
                 sender_inv = await ItemService._get_inv(session, offer.initiator, item.id)
                 if sender_inv is None or sender_inv.quantity < offer.qty:
@@ -245,7 +247,7 @@ class TradeOfferView(discord.ui.View):
         if message is not None and message.embeds:
             embed = message.embeds[0].copy()
             embed.description = (
-                f"{embed.description or ''}\n\n*Trade complete — {interaction.user.mention} "
+                f"{embed.description or ''}\n\n*Trade complete {interaction.user.mention} "
                 f"paid {format_coins(total)} for **{item.name}** x{offer.qty}.*"
             )
         if message is not None:
@@ -373,7 +375,9 @@ class Shop(commands.Cog):
             items = await ItemService.get_all(session, include_limited=False)
         categories = sorted({item.category for item in items})
         positions = {item.id: index for index, item in enumerate(items, start=1)}
-        pages: Dict[str, List[discord.Embed]] = {"all": self._shop_pages(items, positions=positions)}
+        pages: Dict[str, List[discord.Embed]] = {
+            "all": self._shop_pages(items, positions=positions)
+        }
         for cat in categories:
             pages[cat] = self._shop_pages(
                 [item for item in items if item.category == cat], cat, positions
@@ -534,7 +538,7 @@ class Shop(commands.Cog):
     async def eat(self, ctx: commands.Context, item_id: str):
         """Eat a consumable food item (items with a ``consumed_message``).
 
-        Eating consumes the item for flavor only — it never pays the item's
+        Eating consumes the item for flavor only it never pays the item's
         coin effect (use `!use` for that).
         """
         async with self.bot.get_session() as session:
@@ -544,17 +548,18 @@ class Shop(commands.Cog):
             if not item.consumable:
                 return await ctx.send(f"**{item.name}** isn't something you can eat.")
             if not item.consumed_message:
-                return await ctx.send(
-                    f"**{item.name}** isn't edible — try `!use {item.id}` instead."
-                )
+                return await ctx.send(f"**{item.name}** isn't edible try `!use {item.id}` instead.")
             ok, msg, amount = await ItemService.use_item(
                 session, ctx.author.id, item, ctx=ctx, grant_money=False
             )
             if not ok:
                 return await ctx.send(msg)
-            msg = self._render_message(
-                item.consumed_message, item=item, amount=amount, user=ctx.author
-            ) or msg
+            msg = (
+                self._render_message(
+                    item.consumed_message, item=item, amount=amount, user=ctx.author
+                )
+                or msg
+            )
             embed = EmbedBuilder.success_embed(f"{item.name}", msg)
             await ctx.send(embed=embed)
 
@@ -660,7 +665,7 @@ class Shop(commands.Cog):
         You offer an item; the other user replies with their own
         `!trade @you <item> <qty>` to complete the exchange. Add a custom
         `price` (coins per item, e.g. `!trade @you rose 1 5`) to sell the
-        item for coins instead — the other user presses **Accept** to pay.
+        item for coins instead the other user presses **Accept** to pay.
         """
         if user == ctx.author:
             return await ctx.send("You can't trade with yourself.")
@@ -686,7 +691,7 @@ class Shop(commands.Cog):
             if pending:
                 if pending.price:
                     return await ctx.send(
-                        "That offer is a coin trade — press **Accept** on it to pay "
+                        "That offer is a coin trade press **Accept** on it to pay "
                         "and receive the item."
                     )
                 partner_item = await ItemService.get(session, pending.item_id)

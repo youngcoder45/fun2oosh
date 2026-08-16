@@ -102,7 +102,7 @@
     },
     "lottery": {
       "ticket_price": 50,
-      "draw_interval_seconds": 86400,
+      "draw_interval_seconds": 100,
       "next_draw_at": null,
       "max_tickets_per_buy": 100,
       "max_tickets_per_user": null

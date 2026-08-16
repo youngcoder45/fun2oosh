@@ -408,9 +408,7 @@ class BlackjackGame:
 
         wallet = await EconomyUtils.get_or_create_wallet(self.session, self.player.id)
         if wallet.balance < hand.bet:
-            await interaction.followup.send(
-                "You don't have enough 💎️ to split!", ephemeral=True
-            )
+            await interaction.followup.send("You don't have enough 💎️ to split!", ephemeral=True)
             return
 
         # Deduct the extra bet for the second hand
@@ -491,8 +489,7 @@ class BlackjackGame:
             for index, (hand, payout, label) in enumerate(results, start=1):
                 profit = payout - hand.bet
                 lines.append(
-                    f"**Hand {index}:** {label} — paid {payout:,} 💎️ "
-                    f"(profit {profit:+,} 💎️)"
+                    f"**Hand {index}:** {label} paid {payout:,} 💎️ (profit {profit:+,} 💎️)"
                 )
             result_value = "\n".join(lines)
         else:
@@ -583,7 +580,7 @@ def roulette_bet_label(bet_type: str, number: Optional[int]) -> str:
 def roulette_outcome(result_number: int, bet_type: str, number: Optional[int]) -> Tuple[bool, int]:
     """Evaluate one bet against the winning number.
 
-    Returns ``(won, multiplier)`` — 36x for a straight number, 2x for
+    Returns ``(won, multiplier)`` 36x for a straight number, 2x for
     colors/odd/even/ranges.
     """
     red = result_number in RED_NUMBERS
@@ -656,7 +653,7 @@ class SlotMachine:
 
     SYMBOLS = ["CHERRY", "LEMON", "ORANGE", "GRAPE", "BELL", "STAR", "DIAMOND", "SEVEN"]
 
-    # Reel emojis — slots is the only game that uses emojis; without them the
+    # Reel emojis slots is the only game that uses emojis; without them the
     # reels look like plain text. Keep them scoped to this class only.
     EMOJI = {
         "CHERRY": "\U0001f352",  # 🍒
@@ -723,9 +720,7 @@ class Casino(commands.Cog):
         placeholders (``amount``, ``bet``, ``profit``, ``number``, ...) are
         filled per game.
         """
-        return render_event(
-            pool, currency=self.config.currency_name, fallback=fallback, **extra
-        )
+        return render_event(pool, currency=self.config.currency_name, fallback=fallback, **extra)
 
     async def check_bet_limits(self, user_id: int, bet: int, session) -> Tuple[bool, Optional[str]]:
         """Check if bet is within limits."""
@@ -774,7 +769,7 @@ class Casino(commands.Cog):
             if user is not None:
                 name = user.display_name
             lines.append(
-                f"**#{rank}** {name or f'<@{row.user_id}>'} — {row.total_won:,} 💎️ total "
+                f"**#{rank}** {name or f'<@{row.user_id}>'} {row.total_won:,} 💎️ total "
                 f"(best {row.best_win:,} 💎️ • {row.wins} win{'s' if row.wins != 1 else ''})"
             )
         embed = EmbedBuilder.info_embed("🎰 Casino Leaderboard", "\n".join(lines))
@@ -833,7 +828,7 @@ class Casino(commands.Cog):
         bet="red, black, odd, even, low (1-18), high (19-36), or a number 0-36",
     )
     async def roulette(self, ctx: commands.Context, amount: int, bet: str):
-        """European roulette — `!roulette <amount> <bet>`.
+        """European roulette `!roulette <amount> <bet>`.
 
         A round stays open for 15 seconds after the last bet (max 1 minute);
         everyone in the channel can join before the wheel spins. Bets:
@@ -1108,9 +1103,7 @@ class Casino(commands.Cog):
             else:
                 embed.add_field(
                     name="You Lost",
-                    value=self._event_outcome(
-                        "slots_loss", f"Lost: {bet:,} 💎️", bet=f"{bet:,} 💎️"
-                    ),
+                    value=self._event_outcome("slots_loss", f"Lost: {bet:,} 💎️", bet=f"{bet:,} 💎️"),
                     inline=False,
                 )
                 embed.color = COLOR_ERROR
@@ -1187,9 +1180,7 @@ class Casino(commands.Cog):
             else:
                 embed.add_field(
                     name="You Lost",
-                    value=self._event_outcome(
-                        "casino_loss", f"-{bet:,} 💎️", bet=f"{bet:,} 💎️"
-                    ),
+                    value=self._event_outcome("casino_loss", f"-{bet:,} 💎️", bet=f"{bet:,} 💎️"),
                     inline=False,
                 )
                 embed.color = COLOR_ERROR
@@ -2287,7 +2278,9 @@ class Casino(commands.Cog):
                 )
 
                 result_text = self._event_outcome(
-                    "poker_tie", f"```yaml\nTIE\n```\n**Bet Returned:** {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                    "poker_tie",
+                    f"```yaml\nTIE\n```\n**Bet Returned:** {bet:,} 💎️",
+                    bet=f"{bet:,} 💎️",
                 )
                 embed.color = discord.Color.gold()
             else:

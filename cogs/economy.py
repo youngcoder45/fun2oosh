@@ -160,9 +160,7 @@ class Economy(commands.Cog):
         """Slash command for work."""
         duration = int(activity_config("work").get("cooldown_seconds", 1800))
         if cooldown_manager.is_on_cooldown("work", interaction.user.id, duration):
-            remaining = cooldown_manager.get_remaining_time(
-                "work", interaction.user.id, duration
-            )
+            remaining = cooldown_manager.get_remaining_time("work", interaction.user.id, duration)
             return await interaction.response.send_message(
                 cooldown_notice("work", remaining), ephemeral=True
             )
@@ -1183,12 +1181,12 @@ class Economy(commands.Cog):
             embed.set_thumbnail(url=avatar)
             embed.description = f"**{len(unlocked)}/{len(ACHIEVEMENTS)}** unlocked"
             if not unlocked:
-                embed.description += "\nNo achievements unlocked yet — start earning!"
+                embed.description += "\nNo achievements unlocked yet start earning!"
             else:
                 lines = []
                 for aid, meta in ACHIEVEMENTS.items():
                     if aid in unlocked:
-                        lines.append(f"✅ **{meta['name']}** — {meta['desc']}")
+                        lines.append(f"✅ **{meta['name']}** {meta['desc']}")
                 embed.description += "\n\n" + "\n".join(lines)
             return embed
 
@@ -1327,7 +1325,7 @@ class Economy(commands.Cog):
     ) -> Tuple[int, List[Tuple[str, int, int]], int]:
         """Claim every ready income role, atomically, under the caller's lock.
 
-        Returns ``(earned, breakdown, next_ts)`` — breakdown entries are
+        Returns ``(earned, breakdown, next_ts)`` breakdown entries are
         ``(role_name, earned, role_id)`` so the embed can render mentions.
         ``earned`` is 0 when every role is on cooldown; ``next_ts`` is the
         epoch of the earliest role that will become claimable again.
@@ -1346,7 +1344,7 @@ class Economy(commands.Cog):
             next_waits.append(interval)
 
         if not ready:
-            # Nothing claimed — report the earliest window without touching the wallet.
+            # Nothing claimed report the earliest window without touching the wallet.
             return 0, [], unix_ts(utcnow()) + min(next_waits)
 
         wallet = await EconomyUtils.get_or_create_wallet(session, user_id)
