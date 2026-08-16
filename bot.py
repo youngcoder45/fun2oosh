@@ -88,6 +88,10 @@ class Fun2OoshBot(commands.Bot):
             item_count = await ItemService.seed(session)
             if item_count:
                 logger.info("Synced %d items into the catalog from config", item_count)
+            # Reload paid money boosters so they keep running through restarts
+            booster_count = await ItemService.restore_boosters(session)
+            if booster_count:
+                logger.info("Restored %d active money booster(s)", booster_count)
 
         for cog in CORE_COGS:
             await self.load_extension(cog)

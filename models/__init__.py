@@ -2,6 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .active_booster import ActiveBooster
 from .audit_log import AuditLog
 from .base import Base, utcnow
 from .bet import Bet
@@ -32,5 +33,6 @@ __all__ = [
     'GuildConfig',
     'AuditLog',
     'UserAchievement',
+    'ActiveBooster',
     'Session',
 ]

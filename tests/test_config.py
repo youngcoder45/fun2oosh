@@ -26,7 +26,7 @@ from cogs.casino import (  # noqa: E402
     roulette_outcome,
 )
 from models import Base  # noqa: E402
-from services.items import ItemService  # noqa: E402
+from services.items import ItemService, booster_manager  # noqa: E402
 from utils.config import Config  # noqa: E402
 from utils.helpers import format_template, render_item_message  # noqa: E402
 from utils.migrations import run_migrations  # noqa: E402
@@ -183,7 +183,30 @@ async def main() -> None:
         assert parse_roulette_bet("banana") == (None, None)
         print("OK roulette bet parsing")
 
-        # 7. roulette outcome evaluation (17 is black in real roulette)
+        # 7b. money boosters persist across restarts (simulated with a fresh engine)
+        user_id = 90001
+        async with bot.session_factory() as session:
+            item = await ItemService.get(session, "lucky_charm")
+            assert item is not None
+            await ItemService.grant(session, user_id, item, 1)
+            ok, _, _ = await ItemService.use_item(session, user_id, item)
+            assert ok
+            assert booster_manager.get_multiplier(user_id) > 1.0
+
+        # Simulate a restart: fresh engine/session, restore boosters from the DB
+        bot2 = Fun2OoshBot(Config())
+        try:
+            async with bot2.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            async with bot2.session_factory() as session:
+                restored = await ItemService.restore_boosters(session)
+                assert restored >= 1
+            assert booster_manager.get_multiplier(user_id) > 1.0
+            print("OK booster persistence across restarts")
+        finally:
+            await bot2.engine.dispose()
+
+        # 8. roulette outcome evaluation (17 is black in real roulette)
         assert len(RED_NUMBERS) == 18
         assert roulette_outcome(17, "black", None) == (True, 2)
         assert roulette_outcome(17, "red", None) == (False, 0)

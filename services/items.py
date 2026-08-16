@@ -16,8 +16,9 @@ import discord
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import InventoryItem, Item, utcnow
+from models import ActiveBooster, InventoryItem, Item, utcnow
 from utils.economy_utils import EconomyUtils
+from utils.helpers import unix_ts
 from utils.runtime_config import items as config_items
 
 from .locks import lock_manager
@@ -40,7 +41,12 @@ def _message_field(value) -> Optional[str]:
 
 
 class BoosterManager:
-    """In-memory money boosters (lost on restart -> acceptable for v1)."""
+    """Money boosters, backed by the ``active_boosters`` table.
+
+    Boosters are kept in memory for fast lookups but every activation is also
+    written to the database, and ``ItemService.restore_boosters`` reloads them
+    on startup — so paid boosters survive bot restarts.
+    """
 
     def __init__(self) -> None:
         self._boosters: Dict[int, Dict[str, Tuple[float, float]]] = {}
@@ -54,13 +60,19 @@ class BoosterManager:
     ) -> None:
         self._boosters.setdefault(user_id, {})[booster_type] = (
             multiplier,
-            time.monotonic() + duration_seconds,
+            time.time() + duration_seconds,
         )
+
+    def set_absolute(
+        self, user_id: int, booster_type: str, multiplier: float, expires_epoch: float
+    ) -> None:
+        """Restore a booster with an absolute expiry (loaded from the DB)."""
+        self._boosters.setdefault(user_id, {})[booster_type] = (multiplier, expires_epoch)
 
     def get_multiplier(self, user_id: int, booster_type: str = "all") -> float:
         multiplier = 1.0
         for btype, (mult, expires) in self._boosters.get(user_id, {}).items():
-            if expires <= time.monotonic():
+            if expires <= time.time():
                 continue
             if btype == booster_type or btype == "all":
                 multiplier = max(multiplier, mult)
@@ -358,9 +370,31 @@ class ItemService:
 
             elif "booster" in effects:
                 booster = effects["booster"]
+                btype = booster.get("type", "all")
                 mult = booster.get("multiplier", 2.0)
                 duration = booster.get("duration", 3600)
-                booster_manager.set(user_id, booster.get("type", "all"), mult, duration)
+                booster_manager.set(user_id, btype, mult, duration)
+                # Persist so the booster survives restarts (upsert by type)
+                row = (
+                    await session.execute(
+                        select(ActiveBooster).where(
+                            ActiveBooster.user_id == user_id,
+                            ActiveBooster.booster_type == btype,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if row is not None:
+                    row.multiplier = mult
+                    row.expires_at = utcnow() + timedelta(seconds=duration)
+                else:
+                    session.add(
+                        ActiveBooster(
+                            user_id=user_id,
+                            booster_type=btype,
+                            multiplier=mult,
+                            expires_at=utcnow() + timedelta(seconds=duration),
+                        )
+                    )
                 msg = (
                     f"You activated a **{mult}x** money booster for "
                     f"**{duration / 60:.0f} minutes**!"
@@ -419,6 +453,29 @@ class ItemService:
         except discord.Forbidden:
             return False, "I don't have permission to assign that role."
         return True, f"You used **{item.name}** and received the **{role.name}** role!"
+
+    @staticmethod
+    async def restore_boosters(session: AsyncSession) -> int:
+        """Reload active boosters from the DB into memory (startup).
+
+        Expired rows are deleted; live ones are fed back into
+        ``booster_manager`` with their absolute expiry. Returns how many live
+        boosters were restored.
+        """
+        rows = (await session.execute(select(ActiveBooster))).scalars().all()
+        now = time.time()
+        restored = 0
+        for row in rows:
+            if row.expires_at is None:
+                continue
+            expires = unix_ts(row.expires_at)
+            if expires <= now:
+                await session.delete(row)
+                continue
+            booster_manager.set_absolute(row.user_id, row.booster_type, row.multiplier, expires)
+            restored += 1
+        await session.commit()
+        return restored
 
     @staticmethod
     async def _open_crate_raw(

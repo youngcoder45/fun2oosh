@@ -194,6 +194,22 @@ consumes it and shows the random `used_message`. Item use effects live in
 "effects": { "booster": { "type": "all", "multiplier": 2.0, "duration": 1800 } }
 ```
 
+## Data persistence
+
+All player data lives in the SQLite database (`fun2oosh.db`) and survives bot
+restarts:
+
+- **Wallets & banks** — balance, bank, prestige, reputation, daily streak, last claim times
+- **Transaction history** — every work/gamble/buy/sell/transfer/etc. entry
+- **Inventory** — owned items, quantities, durability, and expiry
+- **Achievements** — which of the 53 achievements each user has unlocked
+- **Server settings** — guild config, role income & claim records, audit log
+- **Active money boosters** (lucky charm, 2x booster) — written to the DB on
+  activation and reloaded at startup, so paid boosters keep running through restarts
+
+The only in-memory state (reset on restart): command cooldowns, pending trade
+offers (they expire after 60s anyway), and in-progress casino rounds.
+
 ## Project structure
 
 ```
