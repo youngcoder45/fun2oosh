@@ -25,6 +25,7 @@ CATEGORY_LABELS: Dict[str, str] = {
     "Casino": "Casino & Gambling",
     "Shop": "Shop & Items",
     "Activities": "Progression & Activities",
+    "LotteryCog": "Lottery",
     "Admin": "Admin",
 }
 
@@ -119,6 +120,19 @@ GAME_GUIDES: Dict[str, str] = {
         "**Goal:** double up on a coin flip.\n"
         "**How:** `{prefix}gamble <amount>` — 45% chance to double your money, 55% to lose it all.\n"
         "**Usage:** `{prefix}gamble 100`"
+    ),
+    "lottery": (
+        "**Goal:** win the server jackpot.\n"
+        "**How:** `{prefix}lottery buy <n>` — each ticket costs the configurable price "
+        "(default 50 💎). A scheduled draw happens every `draw_interval_seconds` "
+        "(default 24h) and one random ticket takes the whole pot.\n"
+        "**Usage:** `{prefix}lottery` to see the pot, `{prefix}lottery buy 5` to buy 5 tickets"
+    ),
+    "casinoleaderboard": (
+        "**Goal:** see the casino's biggest winners.\n"
+        "**How:** `{prefix}casinoleaderboard` — ranks users by lifetime casino wins "
+        "(biggest single win, total wins, and net across all games).\n"
+        "**Usage:** `{prefix}casinoleaderboard`"
     ),
 }
 

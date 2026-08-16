@@ -35,7 +35,7 @@ import logging
 import random
 import string
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 logger = logging.getLogger("fun2oosh.events")
 
@@ -43,6 +43,26 @@ _EVENTS_DIR = Path(__file__).resolve().parent.parent / "data" / "events"
 
 # Pool name -> loaded messages (lazy cache)
 _POOLS: Dict[str, List[str]] = {}
+
+# Pools whose messages all live in a shared file (file -> pool prefixes).
+# ``_pool_file`` maps a pool to its JSON file by its first ``_``-segment,
+# but casino outcome pools all share ``casino.json``.
+_SHARED_FILES: Dict[str, Tuple[str, ...]] = {
+    "casino": (
+        "roulette_result",
+        "blackjack_win",
+        "blackjack_loss",
+        "slots_win",
+        "slots_loss",
+        "baccarat_win",
+        "baccarat_loss",
+        "keno_win",
+        "keno_loss",
+        "poker_win",
+        "poker_loss",
+        "poker_tie",
+    ),
+}
 
 
 class _TolerantFormatter(string.Formatter):
@@ -60,6 +80,9 @@ _formatter = _TolerantFormatter()
 
 def _pool_file(pool: str) -> Path:
     """Map a pool name to its JSON file (pools and files share names)."""
+    for file_name, prefixes in _SHARED_FILES.items():
+        if pool in prefixes:
+            return _EVENTS_DIR / f"{file_name}.json"
     return _EVENTS_DIR / f"{pool.split('_')[0]}.json"
 
 
@@ -102,10 +125,13 @@ def render(
     user: str = "",
     guild: str = "",
     fallback: Optional[str] = None,
+    **extra: Any,
 ) -> str:
     """Return a random event message from ``pool`` with placeholders filled.
 
     ``fallback`` is used when the pool is empty so commands always have text.
+    ``extra`` supplies additional placeholders (e.g. ``bet``, ``profit`` for
+    casino outcome lines).
     """
     messages = load_pool(pool)
     if messages:
@@ -119,6 +145,7 @@ def render(
         "currency": currency,
         "user": user,
         "guild": guild,
+        **extra,
     }
     return _formatter.vformat(template, (), values)
 

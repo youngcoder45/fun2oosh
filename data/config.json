@@ -99,6 +99,10 @@
     },
     "rep": {
       "cooldown_seconds": 43200
+    },
+    "lottery": {
+      "ticket_price": 50,
+      "draw_interval_seconds": 86400
     }
   },
   "shop": {

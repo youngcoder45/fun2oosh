@@ -20,7 +20,12 @@ from services.events import event_message
 from services.guild import GuildConfigService
 from services.items import ItemService
 from services.locks import lock_manager
-from services.progression import ACHIEVEMENTS, AchievementService, ProgressionService
+from services.progression import (
+    ACHIEVEMENT_PROGRESS,
+    ACHIEVEMENTS,
+    AchievementService,
+    ProgressionService,
+)
 from utils.config import Config
 from utils.cooldowns import check_cooldown
 from utils.economy_utils import EconomyUtils
@@ -256,6 +261,7 @@ class Activities(commands.Cog):
         target = user or ctx.author
         async with self.bot.get_session() as session:
             unlocked = set(await AchievementService.unlocked_ids(session, target.id))
+            stats = await AchievementService._stats(session, target.id)
 
         items = list(ACHIEVEMENTS.items())
         pages = []
@@ -268,9 +274,18 @@ class Activities(commands.Cog):
             )
             for aid, meta in items[start : start + per_page]:
                 done = aid in unlocked
+                if done:
+                    value = meta["desc"]
+                else:
+                    value = f"Locked - {meta['desc']}"
+                    progress = ACHIEVEMENT_PROGRESS.get(aid)
+                    if progress:
+                        stat_key, target_value = progress
+                        current = stats.get(stat_key, 0)
+                        value += f"\n`{current:,}/{target_value:,}`"
                 embed.add_field(
                     name=f"{EMOJI_UNLOCK if done else EMOJI_LOCK} {meta['name']}",
-                    value=f"{meta['desc']}" if done else f"Locked - {meta['desc']}",
+                    value=value,
                     inline=False,
                 )
             embed.set_footer(

@@ -9,6 +9,7 @@ from .bet import Bet
 from .guild_config import GuildConfig
 from .inventory import InventoryItem
 from .item import Item
+from .lottery import Lottery, LotteryTicket
 from .role_claim import RoleClaim
 from .role_income import RoleIncome
 from .transaction import Transaction
@@ -30,6 +31,8 @@ __all__ = [
     'RoleIncome',
     'RoleClaim',
     'InventoryItem',
+    'Lottery',
+    'LotteryTicket',
     'GuildConfig',
     'AuditLog',
     'UserAchievement',

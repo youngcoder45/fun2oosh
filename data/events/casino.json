@@ -1,0 +1,73 @@
+{
+  "casino_win": [
+    "```diff\n+ WIN\n```\n**Payout:** {amount}\n**Profit:** +{profit}",
+    "```diff\n+ WIN\n```\n**Payout:** {amount}\n**Profit:** +{profit} — nice one!",
+    "```diff\n+ WIN\n```\n{amount} richer! **Profit:** +{profit}"
+  ],
+  "casino_loss": [
+    "```diff\n- LOSS\n```\n**Lost:** {bet}",
+    "```diff\n- LOSS\n```\n**Lost:** {bet} — better luck next time!",
+    "```diff\n- LOSS\n```\nThe house takes your {bet}."
+  ],
+  "casino_push": [
+    "```\nPUSH\n```\n**Returned:** {bet}",
+    "```\nPUSH\n```\nIt's a tie — **{bet}** returned.",
+    "```\nPUSH\n```\nCards matched — {bet} handed back."
+  ],
+  "roulette_result": [
+    "**Roulette Result**\n\n**Winning Number:** `{number}`\n**Winning Color:** {color}",
+    "**Roulette Result**\n\nThe ball lands on **{number} ({color})**!",
+    "**Roulette Result**\n\nIt's **{number}** — **{color}** wins!"
+  ],
+  "blackjack_win": [
+    "```diff\n+ {label}\n```\n**Payout:** {amount}\n**Profit:** +{profit}",
+    "```diff\n+ {label}\n```\n**Payout:** {amount} — clean hand!",
+    "```diff\n+ {label}\n```\n{amount} richer! **Profit:** +{profit}"
+  ],
+  "blackjack_loss": [
+    "```diff\n- LOSS\n```\n**Lost:** {bet}",
+    "```diff\n- LOSS\n```\nThe dealer takes your {bet}.",
+    "```diff\n- LOSS\n```\nBusted — lost {bet}."
+  ],
+  "slots_win": [
+    "Payout: {amount} (+{profit})\n**{multiplier}x** multiplier!",
+    "{amount} from a **{multiplier}x** spin! (+{profit})",
+    "Jackpot line! **{multiplier}x** → {amount} (+{profit})"
+  ],
+  "slots_loss": [
+    "Lost: {bet}",
+    "No luck this spin — lost {bet}.",
+    "The reels tease you and take {bet}."
+  ],
+  "baccarat_win": [
+    "```diff\n+ WIN\n```\n**Winner:** {winner}\n**Payout:** {amount}\n**Profit:** +{profit}",
+    "```diff\n+ WIN\n```\n**Winner:** {winner} — {amount} richer!",
+    "```diff\n+ WIN\n```\n{winner} takes it! **Payout:** {amount}"
+  ],
+  "baccarat_loss": [
+    "```diff\n- LOSS\n```\n**Winner:** {winner}\n**Lost:** {bet}",
+    "```diff\n- LOSS\n```\n{winner} wins — you lose {bet}."
+  ],
+  "keno_win": [
+    "```diff\n+ WIN\n```\n**Multiplier:** {multiplier}x\n**Payout:** {amount}\n**Profit:** +{profit}",
+    "```diff\n+ WIN\n```\n**{matches}** matches! **{multiplier}x** → {amount}",
+    "```diff\n+ WIN\n```\n**{multiplier}x** on {matches} matches! +{profit}"
+  ],
+  "keno_loss": [
+    "```diff\n- LOSS\n```\n**Matches:** {matches}/5\n**Lost:** {bet}",
+    "```diff\n- LOSS\n```\nOnly **{matches}** matches — lost {bet}."
+  ],
+  "poker_win": [
+    "```diff\n+ WIN\n```\n**Won:** {amount}\n**Profit:** +{profit}",
+    "```diff\n+ WIN\n```\n**Profit:** +{profit} — nice hand!",
+    "```diff\n+ WIN\n```\nYou take the pot: {amount}"
+  ],
+  "poker_loss": [
+    "```diff\n- LOSS\n```\n**Lost:** {bet}",
+    "```diff\n- LOSS\n```\nThe house takes your {bet}."
+  ],
+  "poker_tie": [
+    "```yaml\nTIE\n```\n**Bet Returned:** {bet}",
+    "```yaml\nTIE\n```\nIt's a tie — {bet} returned."
+  ]
+}

@@ -30,7 +30,8 @@ Documentation:
 - `!gamble` — quick coinflip-style bet
 - `!leaderboard` / `!richest` / `!networth` / `!profile` / `!prestige` — stats & progression
 - `!rep <user>` — give reputation (12h cooldown)
-- `!achievements` / `!badges` — 53 unlockable achievements (paginated with buttons)
+- `!achievements` / `!badges` — 53 unlockable achievements (paginated with buttons); locked
+  ones show live progress (e.g. “Panhandler — 12/25 begs”)
 - `!transactions` / `!history` — paginated transaction log
 
 ### Shop & Inventory (`cogs/shop.py`)
@@ -46,13 +47,24 @@ Documentation:
 - Tools boost rewards: fishing rod → `!fish`, pickaxe → `!mine`, rifle → `!hunt`
 
 ### Casino (`cogs/casino.py`)
-- `!blackjack`, `!poker`, `!roulette <amount> <bet>`, `!slots`, `!coinflip`, `!dice`
+- `!blackjack` (with **Split** button for pairs), `!poker`, `!roulette <amount> <bet>`, `!slots`, `!coinflip`, `!dice`
 - `!crash`, `!russianroulette`, `!war`, `!baccarat`, `!hilo`, `!keno`
+- `!casinoleaderboard` / `!casinolb` — biggest lifetime casino wins (and totals per user)
 - Roulette bets: `!roulette 100 red`, `!roulette 100 even`, `!roulette 100 1-18`,
   `!roulette 100 19-36`, `!roulette 100 0` (numbers 0-36, colors, odd/even, ranges)
 - Roulette is a **shared table**: the round stays open for 15s after the last bet
   (max 1 minute), so everyone in the channel can join before the wheel spins;
   a separate result embed shows the winning number and a winners/losers summary
+- Game outcome text (WIN/LOSS/PUSH lines and the roulette result block) is pulled from
+  `data/events/casino.json` — edit the JSON to reword any game without touching code
+  (`!reloadconfig` re-reads event pools too)
+
+### Lottery (`cogs/lottery.py`)
+- `!lottery` — current pot, ticket price, tickets sold, and next draw time
+- `!lottery buy <n>` — buy tickets (price from `lottery.ticket_price` in `data/config.json`)
+- A background task draws every `lottery.draw_interval_seconds` (default 24h); the winner takes
+  the whole pot. Pot, tickets, and winner history are stored in the database, so they survive
+  restarts; wins are recorded as transactions and audited
 
 ### Admin (`cogs/admin_economy.py`)
 - `!add-money <user> <amount> [cash|bank]`, `!reset_economy CONFIRM`
@@ -206,6 +218,7 @@ restarts:
 - **Server settings** — guild config, role income & claim records, audit log
 - **Active money boosters** (lucky charm, 2x booster) — written to the DB on
   activation and reloaded at startup, so paid boosters keep running through restarts
+- **Lottery** — pot, tickets, and winner history per guild
 
 The only in-memory state (reset on restart): command cooldowns, pending trade
 offers (they expire after 60s anyway), and in-progress casino rounds.
@@ -220,6 +233,7 @@ cogs/
   casino.py            # Gambling games
   shop.py              # Shop, inventory, trading, crates
   activities.py        # hunt/fish/mine, monthly, networth, rep, achievements
+  lottery.py           # Server jackpot with scheduled draws
   admin_economy.py     # Admin, config, shop & item management, audit
 models/                # SQLAlchemy models (incl. items, inventory, guild_config, ...)
 services/

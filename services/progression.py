@@ -242,6 +242,65 @@ ACHIEVEMENTS: Dict[str, dict] = {
 }
 
 
+# achievement_id -> (stat key from AchievementService._stats, target value)
+# Used to show live progress on locked achievements (e.g. "Panhandler — 12/25 begs").
+ACHIEVEMENT_PROGRESS: Dict[str, Tuple[str, int]] = {
+    "first_steps": ("work_count", 1),
+    "workaholic": ("work_count", 10),
+    "career_worker": ("work_count", 50),
+    "beggar": ("beg_count", 1),
+    "panhandler": ("beg_count", 25),
+    "hustler": ("total_earned", 50_000),
+    "hunter": ("hunt_count", 1),
+    "big_game_hunter": ("hunt_count", 25),
+    "angler": ("fish_count", 1),
+    "master_angler": ("fish_count", 25),
+    "miner": ("mine_count", 1),
+    "gold_digger": ("mine_count", 25),
+    "outdoorsman": ("outdoorsman_count", 3),
+    "criminal": ("crime_count", 1),
+    "crime_boss": ("crime_count", 25),
+    "kingpin": ("crime_count", 100),
+    "master_thief": ("rob_count", 10),
+    "getaway_driver": ("rob_count", 25),
+    "legendary_thief": ("rob_count", 50),
+    "explorer": ("search_count", 5),
+    "archaeologist": ("search_count", 25),
+    "scavenger": ("search_count", 100),
+    "gambler": ("gamble_count", 1),
+    "degenerate": ("gamble_count", 100),
+    "high_roller": ("max_gamble", 10_000),
+    "all_in": ("max_gamble", 50_000),
+    "whale": ("max_gamble", 250_000),
+    "shopaholic": ("buy_count", 1),
+    "collector": ("distinct_items", 5),
+    "hoarder": ("distinct_items", 20),
+    "pack_rat": ("distinct_items", 50),
+    "item_connoisseur": ("item_count", 25),
+    "crate_enthusiast": ("crate_count", 5),
+    "crate_addict": ("crate_count", 25),
+    "merchant": ("sell_count", 10),
+    "tycoon": ("sell_count", 100),
+    "philanthropist": ("gifts_given", 5),
+    "popular": ("gifts_received", 5),
+    "trader": ("trade_count", 5),
+    "provider": ("collect_count", 10),
+    "saver": ("deposited_total", 100_000),
+    "banker": ("bank", 1_000_000),
+    "streak_3": ("streak", 3),
+    "streak_7": ("streak", 7),
+    "streak_14": ("streak", 14),
+    "streak_30": ("streak", 30),
+    "rich": ("networth", 100_000),
+    "millionaire": ("networth", 1_000_000),
+    "tycoon_10m": ("networth", 10_000_000),
+    "billionaire": ("networth", 100_000_000),
+    "prestige_1": ("prestige", 1),
+    "prestige_5": ("prestige", 5),
+    "prestige_10": ("prestige", 10),
+}
+
+
 # Achievement id -> condition. `stats` is a dict of derived counters.
 # The `event` is the triggering action ('work', 'crime', 'rob', 'gamble',
 # 'search', 'buy', 'daily', 'prestige', 'crate', 'use').
@@ -493,6 +552,9 @@ class AchievementService:
             "gifts_received": gifts_received,
             "deposited_total": deposited_total,
             "total_earned": total_earned,
+            "outdoorsman_count": sum(
+                1 for key in ("hunt", "fish", "mine") if counts.get(f"{key}_count", 0) >= 1
+            ),
             "streak": wallet.daily_streak or 0,
             "prestige": wallet.prestige or 0,
             "distinct_items": await ItemService.distinct_item_count(session, user_id),

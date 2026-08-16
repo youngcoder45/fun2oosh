@@ -23,9 +23,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import discord
 from discord import app_commands
 from discord.ext import commands
+from sqlalchemy import desc, func, select
 
 from bot import Fun2OoshBot
 from models import Transaction
+from services.events import render as render_event
 from services.locks import lock_manager
 from utils.anti_fraud import anti_fraud as anti_fraud_instance
 from utils.config import Config
@@ -175,6 +177,12 @@ class BlackjackView(discord.ui.View):
         await interaction.response.defer()
         await self.game.double_down(interaction)
 
+    @discord.ui.button(label="Split", style=discord.ButtonStyle.secondary)
+    async def split_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Split - split a pair into two hands."""
+        await interaction.response.defer()
+        await self.game.split(interaction)
+
     async def on_timeout(self):
         """Handle timeout."""
         for item in self.children:  # type: ignore
@@ -195,11 +203,18 @@ class BlackjackGame:
         self.bot = bot
         self.session = session
         self.deck = Deck(num_decks=6)
-        self.player_hand = BlackjackHand(bet, self.deck.deal(2))
+        self.hands: List[BlackjackHand] = [BlackjackHand(bet, self.deck.deal(2))]
+        self.active_index = 0
+        self.is_split = False
         self.dealer_hand = BlackjackHand(0, self.deck.deal(2))
         self.view: Optional[BlackjackView] = None
         self.message: Optional[discord.Message] = None
         self.finished = False
+
+    @property
+    def player_hand(self) -> BlackjackHand:
+        """The hand currently being played."""
+        return self.hands[self.active_index]
 
     async def start(self, ctx) -> discord.Message:
         """Start the blackjack game."""
@@ -215,6 +230,15 @@ class BlackjackGame:
             await self.check_winner()
 
         return message
+
+    def _event_outcome(self, pool: str, fallback: str, **extra: Any) -> str:
+        """Render an outcome line from ``data/events/casino.json``."""
+        return render_event(
+            pool,
+            currency=self.bot.config.currency_name,
+            fallback=fallback,
+            **extra,
+        )
 
     def create_embed(self, final: bool = False) -> discord.Embed:
         """Create professional game status embed."""
@@ -242,27 +266,52 @@ class BlackjackGame:
             inline=False,
         )
 
-        # Player's hand
-        player_cards = " ".join(str(card) for card in self.player_hand.cards)
-        player_value = f"[{self.player_hand.value}]"
-
-        if self.player_hand.is_blackjack:
-            status_text = "BLACKJACK!"
-        elif self.player_hand.busted:
-            status_text = "BUST"
-        elif self.player_hand.stand:
-            status_text = "STANDING"
+        # Player's hand(s)
+        if self.is_split:
+            hand_lines = []
+            for index, hand in enumerate(self.hands, start=1):
+                cards = " ".join(str(card) for card in hand.cards)
+                if hand.is_blackjack:
+                    status = "BLACKJACK!"
+                elif hand.busted:
+                    status = "BUST"
+                elif hand.stand:
+                    status = "STANDING"
+                else:
+                    status = "IN PLAY"
+                active_marker = " ◀" if index - 1 == self.active_index and not final else ""
+                hand_lines.append(
+                    f"**Hand {index}:** `{cards}` | **Value:** [{hand.value}] "
+                    f"| **Status:** {status}{active_marker}"
+                )
+            player_value = "\n".join(hand_lines)
+            embed.add_field(
+                name=f"Player: {self.player.display_name}",
+                value=player_value,
+                inline=False,
+            )
         else:
-            status_text = "IN PLAY"
+            player_cards = " ".join(str(card) for card in self.player_hand.cards)
+            player_value = f"[{self.player_hand.value}]"
 
-        embed.add_field(
-            name=f"Player: {self.player.display_name}",
-            value=f"```\n{player_cards}\n```\n**Value:** {player_value} | **Status:** {status_text}",
-            inline=False,
-        )
+            if self.player_hand.is_blackjack:
+                status_text = "BLACKJACK!"
+            elif self.player_hand.busted:
+                status_text = "BUST"
+            elif self.player_hand.stand:
+                status_text = "STANDING"
+            else:
+                status_text = "IN PLAY"
+
+            embed.add_field(
+                name=f"Player: {self.player.display_name}",
+                value=f"```\n{player_cards}\n```\n**Value:** {player_value} | **Status:** {status_text}",
+                inline=False,
+            )
 
         # Bet information
-        embed.add_field(name="Wager", value=f"```\n{self.player_hand.bet:,} 💎️\n```", inline=True)
+        wager = sum(hand.bet for hand in self.hands)
+        embed.add_field(name="Wager", value=f"```\n{wager:,} 💎️\n```", inline=True)
 
         # Footer
         if final:
@@ -270,31 +319,55 @@ class BlackjackGame:
 
         return embed
 
+    def _next_unplayed_hand(self) -> Optional[BlackjackHand]:
+        """The next hand (after the active one) that still needs to be played."""
+        for hand in self.hands[self.active_index + 1 :]:
+            if not hand.stand and not hand.busted:
+                return hand
+        return None
+
+    async def _advance_or_finish(self, interaction: discord.Interaction) -> bool:
+        """Move to the next split hand, or play the dealer when all are done.
+
+        Returns True when the hand advanced (embed updated); False when the
+        game moved to settlement.
+        """
+        nxt = self._next_unplayed_hand()
+        if nxt is not None:
+            self.active_index = self.hands.index(nxt)
+            embed = self.create_embed()
+            await interaction.edit_original_response(embed=embed, view=self.view)
+            return True
+        await self.dealer_play(interaction)
+        return False
+
     async def hit(self, interaction: discord.Interaction):
         """Player hits - draws a card."""
-        if self.finished or self.player_hand.stand:
+        hand = self.player_hand
+        if self.finished or hand.stand:
             return
 
         card = self.deck.deal(1)[0]
-        self.player_hand.add_card(card)
+        hand.add_card(card)
 
-        if self.player_hand.busted:
-            await self.check_winner(interaction)
+        if hand.busted:
+            await self._advance_or_finish(interaction)
         else:
             embed = self.create_embed()
             await interaction.edit_original_response(embed=embed, view=self.view)
 
     async def stand(self, interaction: discord.Interaction):
-        """Player stands - dealer plays."""
+        """Player stands - dealer plays (or next split hand is played)."""
         if self.finished:
             return
 
         self.player_hand.stand = True
-        await self.dealer_play(interaction)
+        await self._advance_or_finish(interaction)
 
     async def double_down(self, interaction: discord.Interaction):
         """Double the bet and draw one card."""
-        if self.finished or len(self.player_hand.cards) != 2:
+        hand = self.player_hand
+        if self.finished or len(hand.cards) != 2:
             await interaction.followup.send(
                 "You can only double down on your first two cards!", ephemeral=True
             )
@@ -302,26 +375,57 @@ class BlackjackGame:
 
         # Check if player has enough balance
         wallet = await EconomyUtils.get_or_create_wallet(self.session, self.player.id)
-        if wallet.balance < self.player_hand.bet:
+        if wallet.balance < hand.bet:
             await interaction.followup.send(
                 "You don't have enough 💎️ to double down!", ephemeral=True
             )
             return
 
         # Deduct additional bet
-        wallet.balance -= self.player_hand.bet
-        self.player_hand.bet *= 2
-        self.player_hand.doubled = True
+        wallet.balance -= hand.bet
+        hand.bet *= 2
+        hand.doubled = True
 
-        # Draw one card and stand
+        # Draw one card and stand (or move to the next split hand)
         card = self.deck.deal(1)[0]
-        self.player_hand.add_card(card)
-
-        if self.player_hand.busted:
-            await self.check_winner(interaction)
+        hand.add_card(card)
+        if hand.busted:
+            await self._advance_or_finish(interaction)
         else:
-            self.player_hand.stand = True
-            await self.dealer_play(interaction)
+            hand.stand = True
+            await self._advance_or_finish(interaction)
+
+    async def split(self, interaction: discord.Interaction):
+        """Split a pair into two hands (extra bet equal to the original)."""
+        hand = self.player_hand
+        if self.finished or self.is_split:
+            return
+        if len(hand.cards) != 2 or hand.cards[0].value != hand.cards[1].value:
+            await interaction.followup.send(
+                "You can only split when your first two cards are a pair!", ephemeral=True
+            )
+            return
+
+        wallet = await EconomyUtils.get_or_create_wallet(self.session, self.player.id)
+        if wallet.balance < hand.bet:
+            await interaction.followup.send(
+                "You don't have enough 💎️ to split!", ephemeral=True
+            )
+            return
+
+        # Deduct the extra bet for the second hand
+        wallet.balance -= hand.bet
+        card1, card2 = hand.cards
+        hand1 = BlackjackHand(hand.bet, [card1])
+        hand2 = BlackjackHand(hand.bet, [card2])
+        self.hands = [hand1, hand2]
+        self.is_split = True
+        self.active_index = 0
+        hand1.add_card(self.deck.deal(1)[0])
+        hand2.add_card(self.deck.deal(1)[0])
+
+        embed = self.create_embed()
+        await interaction.edit_original_response(embed=embed, view=self.view)
 
     async def dealer_play(self, interaction: discord.Interaction):
         """Dealer plays their hand."""
@@ -334,54 +438,80 @@ class BlackjackGame:
         await self.check_winner(interaction)
 
     async def check_winner(self, interaction: Optional[discord.Interaction] = None):
-        """Determine the winner and pay out."""
+        """Determine the winner(s) and pay out (all split hands are settled)."""
         self.finished = True
-        player_value = self.player_hand.value
         dealer_value = self.dealer_hand.value
 
         wallet = await EconomyUtils.get_or_create_wallet(self.session, self.player.id)
 
-        # Determine result
-        if self.player_hand.busted:
-            payout = 0
-            color = discord.Color(COLOR_ERROR)
-        elif self.dealer_hand.busted:
-            payout = self.player_hand.bet * 2
-            color = discord.Color(COLOR_SUCCESS)
-        elif self.player_hand.is_blackjack and not self.dealer_hand.is_blackjack:
-            payout = int(self.player_hand.bet * 2.5)  # 3:2 payout
-            color = discord.Color.gold()
-        elif player_value > dealer_value:
-            payout = self.player_hand.bet * 2
-            color = discord.Color(COLOR_SUCCESS)
-        elif player_value < dealer_value:
-            payout = 0
-            color = discord.Color(COLOR_ERROR)
-        else:
-            payout = self.player_hand.bet
-            color = discord.Color.blue()
+        # Settle every hand
+        total_payout = 0
+        results: List[Tuple[BlackjackHand, int, str]] = []
+        for hand in self.hands:
+            if hand.busted:
+                payout, label = 0, "BUST"
+            elif self.dealer_hand.busted:
+                payout, label = hand.bet * 2, "WIN"
+            elif hand.is_blackjack and not self.is_split and not self.dealer_hand.is_blackjack:
+                payout, label = int(hand.bet * 2.5), "BLACKJACK"  # 3:2 payout
+            elif hand.value > dealer_value:
+                payout, label = hand.bet * 2, "WIN"
+            elif hand.value < dealer_value:
+                payout, label = 0, "LOSS"
+            else:
+                payout, label = hand.bet, "PUSH"
+            results.append((hand, payout, label))
+            total_payout += payout
 
         # Pay out
-        if payout > 0:
-            wallet.balance += payout
+        if total_payout > 0:
+            wallet.balance += total_payout
             await EconomyUtils.add_money(
-                self.session, self.player.id, payout, "casino", f"Blackjack win: {payout} 💎️"
+                self.session,
+                self.player.id,
+                total_payout,
+                "casino",
+                f"Blackjack win: {total_payout} 💎️",
             )
 
         await self.session.commit()
 
         # Create professional final embed
         embed = self.create_embed(final=True)
-        embed.color = color
+        if any(label in ("WIN", "BLACKJACK") for _, _, label in results):
+            embed.color = discord.Color(COLOR_SUCCESS)
+        elif all(label == "PUSH" for _, _, label in results):
+            embed.color = discord.Color.blue()
+        else:
+            embed.color = discord.Color(COLOR_ERROR)
 
         # Result section
-        if payout > 0:
-            profit = payout - self.initial_bet
-            result_value = (
-                f"```diff\n+ WIN\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
-            )
+        if self.is_split:
+            lines = []
+            for index, (hand, payout, label) in enumerate(results, start=1):
+                profit = payout - hand.bet
+                lines.append(
+                    f"**Hand {index}:** {label} — paid {payout:,} 💎️ "
+                    f"(profit {profit:+,} 💎️)"
+                )
+            result_value = "\n".join(lines)
         else:
-            result_value = f"```diff\n- LOSS\n```\n**Lost:** {self.initial_bet:,} 💎️"
+            _, payout, label = results[0]
+            if payout > 0:
+                profit = payout - self.initial_bet
+                result_value = self._event_outcome(
+                    "blackjack_win",
+                    f"```diff\n+ {label}\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                    label=label,
+                    amount=f"{payout:,} 💎️",
+                    profit=f"+{profit:,} 💎️",
+                )
+            else:
+                result_value = self._event_outcome(
+                    "blackjack_loss",
+                    f"```diff\n- LOSS\n```\n**Lost:** {self.initial_bet:,} 💎️",
+                    bet=f"{self.initial_bet:,} 💎️",
+                )
 
         embed.add_field(name="Outcome", value=result_value, inline=False)
 
@@ -586,6 +716,17 @@ class Casino(commands.Cog):
         self.active_games: Dict[int, BlackjackGame] = {}
         self.roulette_games: Dict[int, RouletteGame] = {}
 
+    def _event_outcome(self, pool: str, fallback: str, **extra: Any) -> str:
+        """Render a casino outcome line from ``data/events/casino.json``.
+
+        Falls back to the built-in text when the pool is empty. Extra
+        placeholders (``amount``, ``bet``, ``profit``, ``number``, ...) are
+        filled per game.
+        """
+        return render_event(
+            pool, currency=self.config.currency_name, fallback=fallback, **extra
+        )
+
     async def check_bet_limits(self, user_id: int, bet: int, session) -> Tuple[bool, Optional[str]]:
         """Check if bet is within limits."""
         if bet < self.config.min_bet:
@@ -599,6 +740,46 @@ class Casino(commands.Cog):
             return False, f"You don't have enough 💎️! Balance: {wallet.balance:,}"
 
         return True, None
+
+    @commands.hybrid_command(
+        name="casinoleaderboard",
+        aliases=["casinolb", "cglb", "casinotop"],
+        description="Show the biggest casino winners",
+    )
+    async def casino_leaderboard(self, ctx: commands.Context):
+        """Top 10 players by total casino winnings (best single win + win count)."""
+        async with self.bot.get_session() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        Transaction.user_id,
+                        func.sum(Transaction.amount).label("total_won"),
+                        func.max(Transaction.amount).label("best_win"),
+                        func.count(Transaction.id).label("wins"),
+                    )
+                    .where(Transaction.type == "casino", Transaction.amount > 0)
+                    .group_by(Transaction.user_id)
+                    .order_by(desc("total_won"))
+                    .limit(10)
+                )
+            ).all()
+
+        if not rows:
+            return await ctx.send("No casino wins recorded yet. Place a bet with `!blackjack`!")
+
+        lines = []
+        for rank, row in enumerate(rows, start=1):
+            name = None
+            user = self.bot.get_user(row.user_id)
+            if user is not None:
+                name = user.display_name
+            lines.append(
+                f"**#{rank}** {name or f'<@{row.user_id}>'} — {row.total_won:,} 💎️ total "
+                f"(best {row.best_win:,} 💎️ • {row.wins} win{'s' if row.wins != 1 else ''})"
+            )
+        embed = EmbedBuilder.info_embed("🎰 Casino Leaderboard", "\n".join(lines))
+        embed.set_footer(text="Ranked by lifetime casino winnings")
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(
         name="blackjack",
@@ -751,10 +932,15 @@ class Casino(commands.Cog):
 
         embed = discord.Embed(color=COLOR_SUCCESS if won else COLOR_ERROR)
         EmbedBuilder.set_author_from_user(embed, game.starter)
-        embed.description = (
-            "**Roulette Result**\n\n"
-            f"**Winning Number:** `{result_number}`\n"
-            f"**Winning Color:** {color_str}"
+        embed.description = self._event_outcome(
+            "roulette_result",
+            (
+                "**Roulette Result**\n\n"
+                f"**Winning Number:** `{result_number}`\n"
+                f"**Winning Color:** {color_str}"
+            ),
+            number=str(result_number),
+            color=color_str,
         )
 
         choices = [
@@ -766,12 +952,20 @@ class Casino(commands.Cog):
             inline=False,
         )
 
-        outcome_block = "```diff\n+ WIN\n```" if won else "```diff\n- LOSS\n```"
         if won:
-            result_lines = f"Payout: {format_coins(total_payout)}\nProfit: +{format_coins(net)}"
+            outcome_value = self._event_outcome(
+                "casino_win",
+                f"```diff\n+ WIN\n```\nPayout: {format_coins(total_payout)}\nProfit: +{format_coins(net)}",
+                amount=format_coins(total_payout),
+                profit=f"+{format_coins(net)}",
+            )
         else:
-            result_lines = f"Payout: {format_coins(0)}\nLoss: -{format_coins(total_bet)}"
-        embed.add_field(name="Outcome", value=f"{outcome_block}\n{result_lines}", inline=False)
+            outcome_value = self._event_outcome(
+                "casino_loss",
+                f"```diff\n- LOSS\n```\nPayout: {format_coins(0)}\nLoss: -{format_coins(total_bet)}",
+                bet=f"-{format_coins(total_bet)}",
+            )
+        embed.add_field(name="Outcome", value=outcome_value, inline=False)
 
         embed.add_field(name="Balance", value=f"```\n{starter_balance:,} 💎️\n```", inline=False)
 
@@ -901,12 +1095,24 @@ class Casino(commands.Cog):
 
                 embed.add_field(
                     name="You Won",
-                    value=f"Payout: {payout:,} 💎️ (+{profit:,})\n**{multiplier}x** multiplier!",
+                    value=self._event_outcome(
+                        "slots_win",
+                        f"Payout: {payout:,} 💎️ (+{profit:,})\n**{multiplier}x** multiplier!",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                        multiplier=str(multiplier),
+                    ),
                     inline=False,
                 )
                 embed.color = discord.Color.gold()
             else:
-                embed.add_field(name="You Lost", value=f"Lost: {bet:,} 💎️", inline=False)
+                embed.add_field(
+                    name="You Lost",
+                    value=self._event_outcome(
+                        "slots_loss", f"Lost: {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                    ),
+                    inline=False,
+                )
                 embed.color = COLOR_ERROR
 
             await session.commit()
@@ -967,10 +1173,25 @@ class Casino(commands.Cog):
                     session, ctx.author.id, payout, "casino", f"Coinflip win: {payout} 💎️"
                 )
 
-                embed.add_field(name="You Won", value=f"{payout:,} 💎️ (+{profit:,})", inline=False)
+                embed.add_field(
+                    name="You Won",
+                    value=self._event_outcome(
+                        "casino_win",
+                        f"{payout:,} 💎️ (+{profit:,})",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                    ),
+                    inline=False,
+                )
                 embed.color = COLOR_SUCCESS
             else:
-                embed.add_field(name="You Lost", value=f"-{bet:,} 💎️", inline=False)
+                embed.add_field(
+                    name="You Lost",
+                    value=self._event_outcome(
+                        "casino_loss", f"-{bet:,} 💎️", bet=f"{bet:,} 💎️"
+                    ),
+                    inline=False,
+                )
                 embed.color = COLOR_ERROR
 
             await session.commit()
@@ -1044,12 +1265,23 @@ class Casino(commands.Cog):
 
                 embed.add_field(
                     name="You Won",
-                    value=f"{payout:,} 💎️ (+{profit:,})\n**{multiplier}x** multiplier!",
+                    value=self._event_outcome(
+                        "casino_win",
+                        f"{payout:,} 💎️ (+{profit:,})\n**{multiplier}x** multiplier!",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                    ),
                     inline=False,
                 )
                 embed.color = COLOR_SUCCESS
             else:
-                embed.add_field(name="You Lost", value=f"Lost: {bet:,} 💎️", inline=False)
+                embed.add_field(
+                    name="You Lost",
+                    value=self._event_outcome(
+                        "casino_loss", f"Lost: {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                    ),
+                    inline=False,
+                )
                 embed.color = COLOR_ERROR
 
             await session.commit()
@@ -1113,14 +1345,23 @@ class Casino(commands.Cog):
 
                 embed.add_field(
                     name="Cashed Out",
-                    value=f"{payout:,} 💎️ (+{profit:,})\nCrashed at {crash_point:.2f}x",
+                    value=self._event_outcome(
+                        "casino_win",
+                        f"{payout:,} 💎️ (+{profit:,})\nCrashed at {crash_point:.2f}x",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                    ),
                     inline=False,
                 )
                 embed.color = COLOR_SUCCESS
             else:
                 embed.add_field(
                     name="Crashed",
-                    value=f"Crashed at {crash_point:.2f}x\nLost: {bet:,} 💎️",
+                    value=self._event_outcome(
+                        "casino_loss",
+                        f"Crashed at {crash_point:.2f}x\nLost: {bet:,} 💎️",
+                        bet=f"{bet:,} 💎️",
+                    ),
                     inline=False,
                 )
                 embed.color = COLOR_ERROR
@@ -1171,12 +1412,18 @@ class Casino(commands.Cog):
             result = random.randint(1, 6)
 
             if result == 1:
-                # BANG! Lost
-                embed.description = "**BANG!**"
-                embed.add_field(name="You're Out", value=f"Lost: {bet:,} 💎️", inline=False)
+                # BANG! Lost                embed.description = "**BANG!**"
+                embed.add_field(
+                    name="You're Out",
+                    value=self._event_outcome(
+                        "casino_loss", f"Lost: {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                    ),
+                    inline=False,
+                )
                 embed.color = COLOR_ERROR
             else:
                 # Click! Survived
+
                 payout = int(bet * 5)  # 4x profit (5x total)
                 profit = payout - bet
                 wallet.balance += payout
@@ -1188,7 +1435,12 @@ class Casino(commands.Cog):
                 embed.description = "*Click*"
                 embed.add_field(
                     name="You Survived",
-                    value=f"{payout:,} 💎️ (+{profit:,})\nYou got lucky!",
+                    value=self._event_outcome(
+                        "casino_win",
+                        f"{payout:,} 💎️ (+{profit:,})\nYou got lucky!",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                    ),
                     inline=False,
                 )
                 embed.color = COLOR_SUCCESS
@@ -1245,17 +1497,28 @@ class Casino(commands.Cog):
                     session, ctx.author.id, payout, "casino", f"War win: {payout} 💎️"
                 )
 
-                result_text = (
-                    f"```diff\n+ WIN\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
+                result_text = self._event_outcome(
+                    "casino_win",
+                    f"```diff\n+ WIN\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                    amount=f"{payout:,} 💎️",
+                    profit=f"+{profit:,} 💎️",
                 )
                 embed.color = COLOR_SUCCESS
             elif player_card.value < dealer_card.value:
-                result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "casino_loss",
+                    f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️",
+                    bet=f"{bet:,} 💎️",
+                )
                 embed.color = COLOR_ERROR
             else:
                 # Tie - return bet
                 wallet.balance += bet
-                result_text = f"```\nPUSH\n```\n**Returned:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "casino_push",
+                    f"```\nPUSH\n```\n**Returned:** {bet:,} 💎️",
+                    bet=f"{bet:,} 💎️",
+                )
                 embed.color = discord.Color.blue()
 
             await session.commit()
@@ -1358,11 +1621,20 @@ class Casino(commands.Cog):
                     session, ctx.author.id, payout, "casino", f"Baccarat win: {payout} 💎️"
                 )
 
-                result_text = f"```diff\n+ WIN\n```\n**Winner:** {winner.upper()}\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
+                result_text = self._event_outcome(
+                    "baccarat_win",
+                    f"```diff\n+ WIN\n```\n**Winner:** {winner.upper()}\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                    winner=winner.upper(),
+                    amount=f"{payout:,} 💎️",
+                    profit=f"+{profit:,} 💎️",
+                )
                 embed.color = COLOR_SUCCESS
             else:
-                result_text = (
-                    f"```diff\n- LOSS\n```\n**Winner:** {winner.upper()}\n**Lost:** {amount:,} 💎️"
+                result_text = self._event_outcome(
+                    "baccarat_loss",
+                    f"```diff\n- LOSS\n```\n**Winner:** {winner.upper()}\n**Lost:** {amount:,} 💎️",
+                    winner=winner.upper(),
+                    bet=f"{amount:,} 💎️",
                 )
                 embed.color = COLOR_ERROR
 
@@ -1433,7 +1705,11 @@ class Casino(commands.Cog):
             elif next_card.value == current_card.value:
                 # Push on tie
                 wallet.balance += bet
-                result_text = f"```\nPUSH\n```\n**Cards matched!**\n**Returned:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "casino_push",
+                    f"```\nPUSH\n```\n**Cards matched!**\n**Returned:** {bet:,} 💎️",
+                    bet=f"{bet:,} 💎️",
+                )
                 embed.color = discord.Color.blue()
 
             if next_card.value != current_card.value:
@@ -1446,10 +1722,19 @@ class Casino(commands.Cog):
                         session, ctx.author.id, payout, "casino", f"High-Low win: {payout} 💎️"
                     )
 
-                    result_text = f"```diff\n+ WIN\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
+                    result_text = self._event_outcome(
+                        "casino_win",
+                        f"```diff\n+ WIN\n```\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                        amount=f"{payout:,} 💎️",
+                        profit=f"+{profit:,} 💎️",
+                    )
                     embed.color = COLOR_SUCCESS
                 else:
-                    result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️"
+                    result_text = self._event_outcome(
+                        "casino_loss",
+                        f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️",
+                        bet=f"{bet:,} 💎️",
+                    )
                     embed.color = COLOR_ERROR
 
             await session.commit()
@@ -1532,11 +1817,21 @@ class Casino(commands.Cog):
                     session, ctx.author.id, payout, "casino", f"Keno win: {payout} 💎️"
                 )
 
-                result_text = f"```diff\n+ WIN\n```\n**Multiplier:** {multiplier}x\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
+                result_text = self._event_outcome(
+                    "keno_win",
+                    f"```diff\n+ WIN\n```\n**Multiplier:** {multiplier}x\n**Payout:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                    multiplier=str(multiplier),
+                    matches=str(matches),
+                    amount=f"{payout:,} 💎️",
+                    profit=f"+{profit:,} 💎️",
+                )
                 embed.color = COLOR_SUCCESS
             else:
-                result_text = (
-                    f"```diff\n- LOSS\n```\n**Matches:** {matches}/5\n**Lost:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "keno_loss",
+                    f"```diff\n- LOSS\n```\n**Matches:** {matches}/5\n**Lost:** {bet:,} 💎️",
+                    matches=str(matches),
+                    bet=f"{bet:,} 💎️",
                 )
                 embed.color = COLOR_ERROR
 
@@ -1977,8 +2272,11 @@ class Casino(commands.Cog):
                     session, ctx.author.id, payout, "casino", f"Poker win: {payout} 💎️"
                 )
 
-                result_text = (
-                    f"```diff\n+ WIN\n```\n**Won:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️"
+                result_text = self._event_outcome(
+                    "poker_win",
+                    f"```diff\n+ WIN\n```\n**Won:** {payout:,} 💎️\n**Profit:** +{profit:,} 💎️",
+                    amount=f"{payout:,} 💎️",
+                    profit=f"+{profit:,} 💎️",
                 )
                 embed.color = COLOR_SUCCESS
             elif winner == "tie":
@@ -1988,10 +2286,14 @@ class Casino(commands.Cog):
                     session, ctx.author.id, bet, "casino", f"Poker tie: {bet} 💎️ returned"
                 )
 
-                result_text = f"```yaml\nTIE\n```\n**Bet Returned:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "poker_tie", f"```yaml\nTIE\n```\n**Bet Returned:** {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                )
                 embed.color = discord.Color.gold()
             else:
-                result_text = f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️"
+                result_text = self._event_outcome(
+                    "poker_loss", f"```diff\n- LOSS\n```\n**Lost:** {bet:,} 💎️", bet=f"{bet:,} 💎️"
+                )
                 embed.color = COLOR_ERROR
 
             await session.commit()
