@@ -4,6 +4,10 @@ A standalone Discord economy & casino bot with wallets, banks, rewards, streaks,
 achievements, prestige, a full item shop & inventory, trading, gambling games,
 transfers, leaderboards, and anti-abuse protection.
 
+**New to the bot? Type `!help` for the command list — `!help <command>` shows
+usage, aliases, and a step-by-step “How to play” for every casino game
+(e.g. `!help keno`).**
+
 Documentation:
 
 - `AUDIT.md` — feature-parity audit, database changes, and security review
@@ -12,9 +16,14 @@ Documentation:
 
 ## Features
 
+### Help (`cogs/help.py`)
+- `!help` — categorized command overview
+- `!help <command>` — usage, aliases, and how-to-play guides for every casino game
+  (e.g. `!help keno` explains the rules, payouts, and example usage)
+
 ### Economy (`cogs/economy.py`)
 - `!balance` / `/balance` — wallet & bank overview
-- `!work`, `!collect`, `!daily` (with streaks), `!weekly`, `!monthly` — recurring income
+- `!work` (random 100–2000 💎, cooldown in `activities.work`), `!collect`, `!daily` (with streaks), `!weekly`, `!monthly` — recurring income
 - `!beg`, `!search`, `!crime`, `!rob`, `!hunt`, `!fish`, `!mine` — risky money makers
 - `!deposit` / `!withdraw` — move money between wallet and bank
 - `!transfer` / `!give` — send coins to other users (per-guild transfer tax optional)

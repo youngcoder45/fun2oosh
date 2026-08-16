@@ -451,7 +451,7 @@ class Shop(commands.Cog):
                         )
                         or description
                     )
-                embed = EmbedBuilder.success_embed("Purchase Complete!", description)
+                embed = EmbedBuilder.activity_embed(description, user=ctx.author)
                 await ctx.send(embed=embed)
 
             new = await AchievementService.check(session, ctx.author.id, "buy")
@@ -637,7 +637,7 @@ class Shop(commands.Cog):
                     )
                     or description
                 )
-            embed = EmbedBuilder.success_embed("Item Gifted!", description)
+            embed = EmbedBuilder.activity_embed(description, user=ctx.author)
             await ctx.send(embed=embed)
 
     # ----------------------------------------------------------------- trade

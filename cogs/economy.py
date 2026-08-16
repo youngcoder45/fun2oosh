@@ -901,8 +901,8 @@ class Economy(commands.Cog):
         if amount < 50:
             return await ctx.send("Minimum gamble is 50 coins!")
 
-        if amount > 10000:
-            return await ctx.send("Maximum gamble is 10,000 coins!")
+        if self.config.max_bet and amount > self.config.max_bet:
+            return await ctx.send(f"Maximum bet is {self.config.max_bet:,} coins!")
 
         async with lock_manager.for_user(ctx.author.id), self.bot.get_session() as session:
             if guard := await self._guard_error(ctx, session):

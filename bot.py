@@ -39,6 +39,7 @@ CORE_COGS = (
     "cogs.admin_economy",
     "cogs.shop",
     "cogs.activities",
+    "cogs.help",
 )
 
 
