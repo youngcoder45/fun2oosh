@@ -11,15 +11,26 @@ Config (``data/config.json`` -> ``lottery``):
 
     "lottery": {
       "ticket_price": 50,
-      "draw_interval_seconds": 86400
+      "draw_interval_seconds": 86400,
+      "next_draw_at": null,
+      "max_tickets_per_buy": 100,
+      "max_tickets_per_user": null
     }
+
+- ``ticket_price`` — coins per ticket
+- ``draw_interval_seconds`` — seconds between draws (used unless pinned)
+- ``next_draw_at`` — optional ISO-8601 UTC time (e.g. ``2026-08-20T20:00:00Z``)
+  pinning the *next* draw to an exact moment; after it fires (or once it is
+  in the past) the interval schedule applies again. Set to ``null`` to disable.
+- ``max_tickets_per_buy`` — max tickets per ``lottery buy`` call
+- ``max_tickets_per_user`` — optional cap on total tickets one user may hold
 """
 
 import asyncio
 import contextlib
 import logging
 import random
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import discord
@@ -51,6 +62,40 @@ class LotteryCog(commands.Cog):
     @staticmethod
     def _cfg(key: str, default):
         return activity_config("lottery").get(key, default)
+
+    @staticmethod
+    def _next_draw_at() -> Optional[datetime]:
+        """The pinned next-draw time from ``lottery.next_draw_at``, if set.
+
+        Accepts an ISO-8601 UTC string (e.g. ``2026-08-20T20:00:00Z`` or
+        ``2026-08-20 20:00:00``) and returns it as naive UTC. Returns ``None``
+        when unset, unparseable, or already in the past (the interval-based
+        schedule then applies).
+        """
+        raw = LotteryCog._cfg("next_draw_at", None)
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            logger.warning("lottery.next_draw_at %r is not a valid ISO-8601 time; ignoring.", raw)
+            return None
+        if parsed.tzinfo is not None:
+            # Normalize any offset to UTC, then drop tzinfo to match naive-UTC storage.
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        now = utcnow()
+        if parsed <= now:
+            return None
+        return parsed
+
+    @staticmethod
+    def _schedule(interval: int) -> datetime:
+        """When the next draw fires: the pinned ``next_draw_at`` if set and
+        still in the future, otherwise ``now + interval``."""
+        pinned = LotteryCog._next_draw_at()
+        if pinned is not None:
+            return pinned
+        return utcnow() + timedelta(seconds=interval)
 
     # ------------------------------------------------------------------- setup
 
@@ -102,8 +147,9 @@ class LotteryCog(commands.Cog):
             return await ctx.send("Lottery only works in servers.")
         if n <= 0:
             return await ctx.send("You must buy at least 1 ticket.")
-        if n > 100:
-            return await ctx.send("You can buy at most 100 tickets at once.")
+        max_buy = int(LotteryCog._cfg("max_tickets_per_buy", 100))
+        if n > max_buy:
+            return await ctx.send(f"You can buy at most {max_buy} tickets at once.")
 
         price = int(LotteryCog._cfg("ticket_price", 50))
         total = n * price
@@ -111,6 +157,16 @@ class LotteryCog(commands.Cog):
 
         async with lock_manager.for_user(ctx.author.id):
             async with self.bot.get_session() as session:
+                ticket = await LotteryCog._get_ticket(session, ctx.guild.id, ctx.author.id)
+                max_user = LotteryCog._cfg("max_tickets_per_user", None)
+                if max_user is not None:
+                    held = (ticket.count if ticket is not None else 0) + n
+                    if held > int(max_user):
+                        return await ctx.send(
+                            f"You can hold at most {int(max_user):,} tickets total; "
+                            f"you'd have {held:,}."
+                        )
+
                 wallet = await EconomyUtils.get_or_create_wallet(session, ctx.author.id)
                 if wallet.balance < total:
                     return await ctx.send(
@@ -124,7 +180,7 @@ class LotteryCog(commands.Cog):
                     lottery = Lottery(
                         guild_id=ctx.guild.id,
                         pot=0,
-                        draw_at=utcnow() + timedelta(seconds=interval),
+                        draw_at=LotteryCog._schedule(interval),
                         channel_id=ctx.channel.id,
                     )
                     session.add(lottery)
@@ -132,7 +188,6 @@ class LotteryCog(commands.Cog):
                     lottery.channel_id = ctx.channel.id
                 lottery.pot += total
 
-                ticket = await LotteryCog._get_ticket(session, ctx.guild.id, ctx.author.id)
                 if ticket is None:
                     session.add(
                         LotteryTicket(guild_id=ctx.guild.id, user_id=ctx.author.id, count=n)
@@ -202,7 +257,7 @@ class LotteryCog(commands.Cog):
 
         if total_tickets == 0 or lottery.pot <= 0:
             # No entries — roll the draw forward, the pot carries over.
-            lottery.draw_at = now + timedelta(seconds=interval)
+            lottery.draw_at = LotteryCog._schedule(interval)
             await session.commit()
             return
 
@@ -215,7 +270,7 @@ class LotteryCog(commands.Cog):
                 winner = t
                 break
         if winner is None:
-            lottery.draw_at = now + timedelta(seconds=interval)
+            lottery.draw_at = LotteryCog._schedule(interval)
             await session.commit()
             return
 
@@ -242,7 +297,7 @@ class LotteryCog(commands.Cog):
         lottery.pot = 0
         lottery.last_draw_at = now
         lottery.last_winner_id = winner.user_id
-        lottery.draw_at = now + timedelta(seconds=interval)
+        lottery.draw_at = LotteryCog._schedule(interval)
         # Reset entries for the next round
         for t in tickets:
             await session.delete(t)

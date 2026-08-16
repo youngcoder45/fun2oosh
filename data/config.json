@@ -102,7 +102,10 @@
     },
     "lottery": {
       "ticket_price": 50,
-      "draw_interval_seconds": 86400
+      "draw_interval_seconds": 86400,
+      "next_draw_at": null,
+      "max_tickets_per_buy": 100,
+      "max_tickets_per_user": null
     }
   },
   "shop": {
@@ -182,7 +185,7 @@
         ],
         "gave_message": [
           "{sender} gave {user} a **{item}** as a sweet treat. 🍭",
-          "{sender} handed {user} a **{item}** — 'for someone cute'. 🍭",
+          "{sender} handed {user} a **{item}** 'for someone cute'. 🍭",
           "{sender} gifted {user} a **{item}** to cheer them up. 🍭",
           "{sender} tossed {user} a **{item}**. Catch! 🍭"
         ],
@@ -212,13 +215,13 @@
         "max_stack": 99,
         "consumed_message": [
           "You sipped **{item}** and felt alive. ☕",
-          "You drank **{item}** — extra energy! ☕",
+          "You drank **{item}** extra energy! ☕",
           "You enjoyed a warm cup of **{item}**. ☕",
           "You gulped **{item}** and got a caffeine boost! ☕"
         ],
         "gave_message": [
           "{sender} handed {user} a **{item}** to wake them up. ☕",
-          "{sender} bought {user} a **{item}** — 'you look like you need it'. ☕",
+          "{sender} bought {user} a **{item}** 'you look like you need it'. ☕",
           "{sender} gave {user} a **{item}** as a friendly gesture. ☕",
           "{sender} passed {user} a **{item}** with a wink. ☕"
         ],
@@ -247,14 +250,14 @@
         "limited": false,
         "max_stack": 99,
         "consumed_message": [
-          "You ate **{item}** — extra cheesy! 🍕",
+          "You ate **{item}** extra cheesy! 🍕",
           "You devoured a slice of **{item}**. 🍕",
           "You munched on **{item}**. Tasty! 🍕",
           "You ate **{item}** and it was delicious. 🍕"
         ],
         "gave_message": [
           "{sender} shared a **{item}** with {user}. 🍕",
-          "{sender} gave {user} a **{item}** — sharing is caring! 🍕",
+          "{sender} gave {user} a **{item}** sharing is caring! 🍕",
           "{sender} slid {user} a **{item}** under the table. 🍕",
           "{sender} gifted {user} a **{item}**. Pizza solves everything! 🍕"
         ],
@@ -284,13 +287,13 @@
         "max_stack": 99,
         "consumed_message": [
           "You chugged **{item}** and got an instant boost! ⚡",
-          "You downed **{item}** — heart racing! ⚡",
+          "You downed **{item}** heart racing! ⚡",
           "You drank **{item}** and felt unstoppable. ⚡",
           "You cracked open **{item}** and gained pure energy! ⚡"
         ],
         "gave_message": [
           "{sender} gave {user} an **{item}** for the grind. ⚡",
-          "{sender} handed {user} an **{item}** — 'stay sharp'. ⚡",
+          "{sender} handed {user} an **{item}** 'stay sharp'. ⚡",
           "{sender} gifted {user} an **{item}** to keep them going. ⚡",
           "{sender} tossed {user} an **{item}**. ⚡"
         ],
@@ -319,26 +322,26 @@
         "limited": false,
         "max_stack": 99,
         "bought_message": [
-          "You bought **{item}** — a perfect gift for someone special. 🎁",
+          "You bought **{item}** a perfect gift for someone special. 🎁",
           "You bought **{item}**. Who's the lucky one? 🎁",
           "You bought **{item}** and tucked it away for later. 🎁",
-          "You bought **{item}** — curiosity sealed inside. 🎁"
+          "You bought **{item}** curiosity sealed inside. 🎁"
         ],
         "used_message": [
           "You scratched off **{item}** and redeemed **{amount}**! 🎁",
-          "You peeled the cover off **{item}** — **{amount}** revealed! 🎁",
+          "You peeled the cover off **{item}** **{amount}** revealed! 🎁",
           "You redeemed **{item}** and got **{amount}**! 🎁",
-          "You used **{item}** — mystery solved for **{amount}**! 🎁"
+          "You used **{item}** mystery solved for **{amount}**! 🎁"
         ],
         "gave_message": [
           "{sender} handed **{item}** to {user} as a gift. 🎁",
-          "{sender} gave {user} a **{item}** — who knows what's inside! 🎁",
+          "{sender} gave {user} a **{item}** who knows what's inside! 🎁",
           "{sender} gifted {user} a **{item}** for no reason at all. 🎁",
-          "{sender} slid {user} a **{item}** — 'just for you'. 🎁"
+          "{sender} slid {user} a **{item}** 'just for you'. 🎁"
         ],
         "sold_message": [
           "You sold **{item}** for **{amount}**. 🎁",
-          "You traded **{item}** for **{amount}** — curiosity sold separately. 🎁",
+          "You traded **{item}** for **{amount}** curiosity sold separately. 🎁",
           "Someone paid **{amount}** for your **{item}**. 🎁",
           "You cashed in **{item}** for **{amount}**. 🎁"
         ],
@@ -361,10 +364,10 @@
         "limited": false,
         "max_stack": 99,
         "bought_message": [
-          "You bought a **{item}**. Warm and gooey — or is it for someone else? 🍪",
+          "You bought a **{item}**. Warm and gooey or is it for someone else? 🍪",
           "You bought a **{item}** and the smell is irresistible. 🍪",
           "You bought a **{item}**. Milk sold separately. 🍪",
-          "You bought a **{item}** — treat yourself! 🍪"
+          "You bought a **{item}** treat yourself! 🍪"
         ],
         "consumed_message": [
           "You ate a **{item}** and it's very tasty! 🍪",
@@ -373,10 +376,10 @@
           "You ate a warm **{item}** and felt happiness. 🍪"
         ],
         "gave_message": [
-          "{sender} gave {user} a **{item}** — fresh from the oven! 🍪",
+          "{sender} gave {user} a **{item}** fresh from the oven! 🍪",
           "{sender} handed {user} a **{item}** with a smile. 🍪",
           "{sender} gifted {user} a **{item}** as a sweet surprise. 🍪",
-          "{sender} tossed {user} a **{item}** — catch! 🍪"
+          "{sender} tossed {user} a **{item}** catch! 🍪"
         ],
         "sold_message": [
           "You sold your **{item}** for **{amount}**. 🍪",
@@ -404,7 +407,7 @@
         "max_stack": 99,
         "bought_message": [
           "You bought a slice of **{item}**. Birthday? Or just Tuesday? 🎂",
-          "You bought **{item}** — someone's celebrating! 🎂",
+          "You bought **{item}** someone's celebrating! 🎂",
           "You bought a slice of **{item}** and it smells divine. 🎂",
           "You bought **{item}**. Who's it for? 🎂"
         ],
@@ -416,7 +419,7 @@
         ],
         "gave_message": [
           "{sender} gave {user} a slice of **{item}**. Celebration time! 🎂",
-          "{sender} handed {user} **{item}** — 'happy unbirthday'! 🎂",
+          "{sender} handed {user} **{item}** 'happy unbirthday'! 🎂",
           "{sender} gifted {user} **{item}** to sweeten their day. 🎂",
           "{sender} shared **{item}** with {user}. Sharing is caring! 🎂"
         ],
@@ -539,7 +542,7 @@
         "max_stack": 99,
         "bought_message": [
           "You bought **{item}**. Whom are you gonna give it to? 👀",
-          "You bought **{item}** — someone's about to blush. 🌹",
+          "You bought **{item}** someone's about to blush. 🌹",
           "You bought **{item}** and immediately felt romantic. 🌹",
           "You bought **{item}**. Your heart says it's for someone special. 🌹"
         ],
@@ -559,7 +562,7 @@
         "sold_message": [
           "You sold **{item}** for **{amount}**. A little sad, but okay. 🌹",
           "You traded **{item}** for **{amount}**. 🌹",
-          "You sold your **{item}** — love doesn't pay the bills, apparently. 🌹",
+          "You sold your **{item}** love doesn't pay the bills, apparently. 🌹",
           "You cashed in **{item}** for **{amount}**. 🌹"
         ]
       },

@@ -602,7 +602,7 @@ class Shop(commands.Cog):
 
     # ------------------------------------------------------------------ gift
 
-    @commands.command(name="giveitem", aliases=["giftitem"])
+    @commands.command(name="giveitem", aliases=["gi", "give-item", "giftitem"])
     async def giveitem(self, ctx: commands.Context, user: discord.User, item_id: str, qty: int = 1):
         """Give items to another user."""
         if user == ctx.author:

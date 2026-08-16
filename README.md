@@ -61,10 +61,14 @@ Documentation:
 
 ### Lottery (`cogs/lottery.py`)
 - `!lottery` — current pot, ticket price, tickets sold, and next draw time
-- `!lottery buy <n>` — buy tickets (price from `lottery.ticket_price` in `data/config.json`)
-- A background task draws every `lottery.draw_interval_seconds` (default 24h); the winner takes
-  the whole pot. Pot, tickets, and winner history are stored in the database, so they survive
-  restarts; wins are recorded as transactions and audited
+- `!lottery buy <n>` — buy tickets; all settings come from the `lottery` block in `data/config.json`
+- Configurable: `ticket_price`, `draw_interval_seconds` (default 24h), `next_draw_at` (an
+  ISO-8601 UTC time like `2026-08-20T20:00:00Z` that pins the **next** draw to an exact moment,
+  then falls back to the interval), `max_tickets_per_buy` (default 100), and an optional
+  `max_tickets_per_user` cap — all applied via `!reloadconfig` without a restart
+- A background task draws every interval (or at the pinned time); the winner takes the whole
+  pot. Pot, tickets, and winner history are stored in the database, so they survive restarts;
+  wins are recorded as transactions and audited
 
 ### Admin (`cogs/admin_economy.py`)
 - `!add-money <user> <amount> [cash|bank]`, `!reset_economy CONFIRM`
