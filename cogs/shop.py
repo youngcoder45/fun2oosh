@@ -314,7 +314,7 @@ class Shop(commands.Cog):
 
     # ------------------------------------------------------------ catalog UI
 
-    def _item_embed(self, item) -> discord.Embed:
+    def _item_embed(self, item, num: int = 0) -> discord.Embed:
         embed = discord.Embed(
             title=item.name,
             description=item.description or "*No description.*",
@@ -327,10 +327,17 @@ class Shop(commands.Cog):
         embed.add_field(name="Stackable", value="Yes" if item.stackable else "No", inline=True)
         embed.add_field(name="Giveable", value="Yes" if item.giveable else "No", inline=True)
         embed.add_field(name="Usable", value="Yes" if item.consumable else "No", inline=True)
-        embed.set_footer(text=f"Item ID: {item.id} • Buy with: !buy {item.id} [qty]")
+        num_text = f"{num:03d}" if num else item.id
+        embed.set_footer(text=f"ID: {item.id} • #{num_text} • Buy with: !buy {num_text} [qty]")
         return embed
 
-    def _shop_pages(self, items: List[Item], category: str = "all") -> List[discord.Embed]:
+    def _shop_pages(
+        self,
+        items: List[Item],
+        category: str = "all",
+        positions: Optional[Dict[str, int]] = None,
+    ) -> List[discord.Embed]:
+        """Build shop pages showing each item's 3-digit catalog number."""
         if not items:
             return [EmbedBuilder.info_embed("Shop", "No items available in this category.")]
 
@@ -340,13 +347,14 @@ class Shop(commands.Cog):
             chunk = items[start : start + per_page]
             embed = discord.Embed(
                 title="Shop Catalog",
-                description=f"Category: **{category.title()}** • `!buy <id> [qty]`",
+                description=f"Category: **{category.title()}** • `!buy <001> [qty]`",
                 color=COLOR_INFO,
             )
             for item in chunk:
+                num = (positions or {}).get(item.id, 0)
                 embed.add_field(
                     name=item.name,
-                    value=f"`{item.id}` - {format_coins(item.price)} ({item.rarity.title()})",
+                    value=f"`{num:03d}` - {format_coins(item.price)} ({item.rarity.title()})",
                     inline=False,
                 )
             embed.set_footer(
@@ -364,9 +372,12 @@ class Shop(commands.Cog):
         async with self.bot.get_session() as session:
             items = await ItemService.get_all(session, include_limited=False)
         categories = sorted({item.category for item in items})
-        pages: Dict[str, List[discord.Embed]] = {"all": self._shop_pages(items)}
+        positions = {item.id: index for index, item in enumerate(items, start=1)}
+        pages: Dict[str, List[discord.Embed]] = {"all": self._shop_pages(items, positions=positions)}
         for cat in categories:
-            pages[cat] = self._shop_pages([item for item in items if item.category == cat], cat)
+            pages[cat] = self._shop_pages(
+                [item for item in items if item.category == cat], cat, positions
+            )
 
         view = ShopView(pages, owner_id=ctx.author.id, categories=categories)
         if category and category.lower() in pages:
@@ -380,11 +391,12 @@ class Shop(commands.Cog):
     async def iteminfo(self, ctx: commands.Context, item_id: str):
         """View details about an item."""
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
-        if item is None:
-            await ctx.send(f"Unknown item `{item_id}`. Use `!shop` to see the catalog.")
-            return
-        await ctx.send(embed=self._item_embed(item))
+            item = await ItemService.resolve(session, item_id)
+            if item is None:
+                await ctx.send(f"Unknown item `{item_id}`. Use `!shop` to see the catalog.")
+                return
+            num = await ItemService.position(session, item.id)
+        await ctx.send(embed=self._item_embed(item, num))
 
     # -------------------------------------------------------------- purchase
 
@@ -395,7 +407,7 @@ class Shop(commands.Cog):
         if qty <= 0:
             return await ctx.send("Quantity must be positive.")
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             if item.limited:
@@ -452,7 +464,7 @@ class Shop(commands.Cog):
         if qty <= 0:
             return await ctx.send("Quantity must be positive.")
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             if item.sell_price <= 0:
@@ -498,7 +510,7 @@ class Shop(commands.Cog):
     async def use(self, ctx: commands.Context, item_id: str):
         """Use a consumable item (money items, role items, boosters, crates)."""
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             ok, msg, amount = await ItemService.use_item(session, ctx.author.id, item, ctx=ctx)
@@ -526,7 +538,7 @@ class Shop(commands.Cog):
         coin effect (use `!use` for that).
         """
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             if not item.consumable:
@@ -601,7 +613,7 @@ class Shop(commands.Cog):
             return await ctx.send("Quantity must be positive.")
 
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             if not item.giveable:
@@ -660,7 +672,7 @@ class Shop(commands.Cog):
             return await ctx.send("Price can't be negative.")
 
         async with self.bot.get_session() as session:
-            item = await ItemService.get(session, item_id.lower())
+            item = await ItemService.resolve(session, item_id)
             if item is None:
                 return await ctx.send(f"Unknown item `{item_id}`.")
             if not item.giveable:

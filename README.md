@@ -26,6 +26,9 @@ Documentation:
 
 ### Shop & Inventory (`cogs/shop.py`)
 - `!shop [category]`, `!buy <item> [qty]`, `!sell <item> [qty]`, `!iteminfo <item>`
+- Every shop item has a 3-digit catalog number (`001`, `002`, …) shown in `!shop`; the number
+  works everywhere the string id does — `!buy 003`, `!sell 003`, `!use 003`, `!eat 003`,
+  `!giveitem @user 003`, `!trade @user 003 1 5`, `!iteminfo 003` — so `!buy 003` buys the rose
 - `!inventory` / `!inv`, `!giveitem <user> <item> [qty]`, `!trade <user> <item> [qty] [price]`
   — add a custom `price` (coins per item) to sell an item for coins instead of swapping
   (e.g. `!trade @user rose 1 5` offers a rose for 5 💎; the other user presses **Accept** to pay)

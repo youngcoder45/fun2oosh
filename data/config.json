@@ -1,7 +1,7 @@
 {
   "activities": {
     "hunt": {
-      "success_rate": 0.60,
+      "success_rate": 0.6,
       "min_reward": 30,
       "max_reward": 180,
       "cooldown_seconds": 45,
@@ -15,14 +15,14 @@
       "insurance_cost": 10
     },
     "mine": {
-      "success_rate": 0.50,
+      "success_rate": 0.5,
       "min_reward": 40,
       "max_reward": 250,
       "cooldown_seconds": 60,
       "insurance_cost": 20
     },
     "crime": {
-      "success_rate": 0.40,
+      "success_rate": 0.4,
       "min_reward": 300,
       "max_reward": 2000,
       "cooldown_seconds": 300,
@@ -30,11 +30,31 @@
       "fine_min": 200,
       "fine_max": 600,
       "crimes": [
-        { "description": "robbed a bank", "min_reward": 500, "max_reward": 1500 },
-        { "description": "hacked a corporation", "min_reward": 800, "max_reward": 2000 },
-        { "description": "stole a rare painting", "min_reward": 600, "max_reward": 1800 },
-        { "description": "smuggled contraband", "min_reward": 400, "max_reward": 1200 },
-        { "description": "pickpocketed tourists", "min_reward": 300, "max_reward": 800 }
+        {
+          "description": "robbed a bank",
+          "min_reward": 500,
+          "max_reward": 1500
+        },
+        {
+          "description": "hacked a corporation",
+          "min_reward": 800,
+          "max_reward": 2000
+        },
+        {
+          "description": "stole a rare painting",
+          "min_reward": 600,
+          "max_reward": 1800
+        },
+        {
+          "description": "smuggled contraband",
+          "min_reward": 400,
+          "max_reward": 1200
+        },
+        {
+          "description": "pickpocketed tourists",
+          "min_reward": 300,
+          "max_reward": 800
+        }
       ]
     },
     "rob": {
@@ -42,15 +62,15 @@
       "cooldown_seconds": 600,
       "min_wallet_to_attempt": 200,
       "min_victim_balance": 100,
-      "rob_min_percent": 0.10,
-      "rob_max_percent": 0.30,
+      "rob_min_percent": 0.1,
+      "rob_max_percent": 0.3,
       "rob_cap": 5000,
       "fine_rate": 0.02,
       "fine_min": 200,
       "fine_max": 500
     },
     "search": {
-      "success_rate": 0.80,
+      "success_rate": 0.8,
       "cooldown_seconds": 45,
       "locations": [
         { "name": "couch cushions", "min_reward": 20, "max_reward": 80 },
@@ -64,7 +84,7 @@
       ]
     },
     "beg": {
-      "success_rate": 0.70,
+      "success_rate": 0.7,
       "min_reward": 10,
       "max_reward": 100,
       "cooldown_seconds": 60

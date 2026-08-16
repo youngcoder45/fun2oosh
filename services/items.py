@@ -142,6 +142,32 @@ class ItemService:
             stmt = stmt.where(Item.limited == False)  # noqa: E712
         return list((await session.execute(stmt)).scalars())
 
+    @staticmethod
+    async def resolve(session: AsyncSession, query: str) -> Optional[Item]:
+        """Resolve a shop item by its string id **or** 3-digit catalog number.
+
+        ``!buy 018`` and ``!buy rose`` both work: an all-digit query is read
+        as the item's 1-based position in the shop catalog (the same sorted
+        order the ``!shop`` pages display).
+        """
+        query = (query or "").strip().lower()
+        if query.isdigit():
+            items = await ItemService.get_all(session, include_limited=False)
+            index = int(query)
+            if 1 <= index <= len(items):
+                return items[index - 1]
+            return None
+        return await ItemService.get(session, query)
+
+    @staticmethod
+    async def position(session: AsyncSession, item_id: str) -> int:
+        """1-based catalog number of an item, or 0 when not in the shop display."""
+        items = await ItemService.get_all(session, include_limited=False)
+        for index, item in enumerate(items, start=1):
+            if item.id == item_id:
+                return index
+        return 0
+
     # ----------------------------------------------------------------- inventory
 
     @staticmethod
